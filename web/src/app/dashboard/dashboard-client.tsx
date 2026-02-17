@@ -95,6 +95,12 @@ type AgentThreadResponse = {
   }>;
 };
 
+type AgentRunStreamEvent =
+  | { type: "status"; status: string; threadId: string }
+  | { type: "delta"; delta: string }
+  | { type: "result"; result: RunResponse }
+  | { type: "error"; error: string };
+
 function isAgentPendingApprovalsResponse(
   value: unknown,
 ): value is AgentPendingApprovalsResponse {
@@ -117,6 +123,19 @@ function isAgentThreadResponse(value: unknown): value is AgentThreadResponse {
 
   const typed = value as AgentThreadResponse;
   return Array.isArray(typed.messages) && Array.isArray(typed.pendingApprovals);
+}
+
+function isAgentRunStreamEvent(value: unknown): value is AgentRunStreamEvent {
+  if (!value || typeof value !== "object" || !("type" in value)) {
+    return false;
+  }
+  const event = value as { type?: unknown };
+  return (
+    event.type === "status" ||
+    event.type === "delta" ||
+    event.type === "result" ||
+    event.type === "error"
+  );
 }
 
 function readErrorMessage(value: unknown, fallback: string): string {
@@ -155,6 +174,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [agentThreadId, setAgentThreadId] = useState<string | null>(null);
   const [agentMessages, setAgentMessages] = useState<AgentThreadMessage[]>([]);
   const [agentThreadLoading, setAgentThreadLoading] = useState(false);
+  const [streamingAssistantText, setStreamingAssistantText] = useState("");
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
   const [runResult, setRunResult] = useState<RunResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -340,9 +360,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
     setRunResult(null);
     setAgentApprovalError(null);
     setAgentApprovalResult(null);
+    setStreamingAssistantText("");
 
     try {
-      const response = await fetch("/api/agent/run", {
+      const response = await fetch("/api/agent/run/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -351,18 +372,79 @@ export function DashboardClient({ user }: DashboardClientProps) {
         }),
       });
 
-      const body = (await response.json().catch(() => null)) as
-        | RunResponse
-        | { error?: string }
-        | null;
-
       if (!response.ok) {
-        const message =
-          body && "error" in body ? body.error : "Agent run failed.";
-        throw new Error(message || "Agent run failed.");
+        const body = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(body?.error || "Agent run failed.");
       }
 
-      const runResponse = body as RunResponse;
+      if (!response.body) {
+        throw new Error("Agent stream did not return a body.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let runResponse: RunResponse | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        let newlineIndex = buffer.indexOf("\n");
+        while (newlineIndex >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          newlineIndex = buffer.indexOf("\n");
+
+          if (!line) {
+            continue;
+          }
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (!isAgentRunStreamEvent(parsed)) {
+            continue;
+          }
+
+          if (parsed.type === "status") {
+            if (parsed.threadId) {
+              setAgentThreadId(parsed.threadId);
+            }
+            continue;
+          }
+
+          if (parsed.type === "delta") {
+            if (typeof parsed.delta === "string" && parsed.delta.length > 0) {
+              setStreamingAssistantText((previous) => previous + parsed.delta);
+            }
+            continue;
+          }
+
+          if (parsed.type === "result") {
+            runResponse = parsed.result;
+            continue;
+          }
+
+          if (parsed.type === "error") {
+            throw new Error(parsed.error || "Agent stream failed.");
+          }
+        }
+      }
+
+      if (!runResponse) {
+        throw new Error("Agent stream ended without a final result.");
+      }
+
       setRunResult(runResponse);
       setAgentThreadId(runResponse.threadId);
       setPrompt("");
@@ -390,6 +472,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
           : "Unexpected request failure.";
       setRunError(message);
     } finally {
+      setStreamingAssistantText("");
       setIsSubmittingRun(false);
     }
   }
@@ -590,6 +673,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   function handleStartNewConversation() {
     setAgentThreadId(null);
     setAgentMessages([]);
+    setStreamingAssistantText("");
     setAgentPendingApproval(null);
     setAgentApprovalFeedback("");
     setAgentApprovalResult(null);
@@ -842,6 +926,15 @@ export function DashboardClient({ user }: DashboardClientProps) {
                 <p className={styles.chatText}>{message.text}</p>
               </article>
             ))}
+            {isSubmittingRun && streamingAssistantText.trim().length > 0 ? (
+              <article className={styles.chatMessageAssistant}>
+                <p className={styles.chatRole}>Assistant</p>
+                <p className={styles.chatText}>{streamingAssistantText}</p>
+              </article>
+            ) : null}
+            {isSubmittingRun && streamingAssistantText.trim().length === 0 ? (
+              <p className={styles.meta}>Assistant is thinking...</p>
+            ) : null}
           </div>
 
           <label htmlFor="prompt" className={styles.label}>

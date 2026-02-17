@@ -72,6 +72,7 @@ export type AgentRunRequest = {
   threadId: string;
   origin: string;
   source: string;
+  onTextDelta?: (delta: string) => void | Promise<void>;
 };
 
 export type AgentRunResponse = {

@@ -92,6 +92,7 @@ async function persistAssistantThreadMessage(params: {
     text: trimmed,
     runId,
     actionId,
+    skipThreadCheck: true,
   });
 }
 
@@ -170,18 +171,6 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
   const actionRef = runRef.collection("actions").doc();
   const now = FieldValue.serverTimestamp();
 
-  await runRef.set({
-    threadId: request.threadId,
-    uid: request.uid,
-    userEmail: request.userEmail,
-    prompt: request.prompt,
-    status: "planning",
-    createdAt: now,
-    startedAt: now,
-    updatedAt: now,
-    source: request.source,
-  });
-
   const runRefPath = runRef.path;
   const actionRefPath = actionRef.path;
 
@@ -195,26 +184,54 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
       source: request.source,
     });
 
-    await appendThreadMessage({
+    const runStartPromise = runRef
+      .set({
+        threadId: request.threadId,
+        uid: request.uid,
+        userEmail: request.userEmail,
+        prompt: request.prompt,
+        status: "planning",
+        createdAt: now,
+        startedAt: now,
+        updatedAt: now,
+        source: request.source,
+      })
+      .catch(() => undefined);
+
+    const previousConversationPromise = listThreadConversationForModel({
+      uid: request.uid,
+      threadId: request.threadId,
+      limit: 30,
+      skipThreadCheck: true,
+    });
+
+    const persistUserMessagePromise = appendThreadMessage({
       uid: request.uid,
       threadId: request.threadId,
       role: "user",
       text: request.prompt,
       runId: runRef.id,
       actionId: actionRef.id,
-    });
+      skipThreadCheck: true,
+    }).catch(() => undefined);
 
-    const conversation = await listThreadConversationForModel({
-      uid: request.uid,
-      threadId: request.threadId,
-      limit: 30,
-    });
+    const previousConversation = await previousConversationPromise;
+    const conversation = [
+      ...previousConversation,
+      {
+        role: "user" as const,
+        text: request.prompt,
+      },
+    ];
 
     const plan = await generateGeminiAgentPlan({
       conversation,
       toolDeclarations: toolSet.declarations,
       systemInstruction: AGENT_SYSTEM_INSTRUCTION,
+      onTextDelta: request.onTextDelta,
     });
+
+    await Promise.all([runStartPromise, persistUserMessagePromise]);
 
     const firstFunctionCall = plan.functionCalls[0];
 

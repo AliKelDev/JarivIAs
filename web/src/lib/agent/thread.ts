@@ -106,14 +106,17 @@ export async function appendThreadMessage(params: {
   text: string;
   runId?: string | null;
   actionId?: string | null;
+  skipThreadCheck?: boolean;
 }) {
-  const { uid, threadId, role, text, runId, actionId } = params;
+  const { uid, threadId, role, text, runId, actionId, skipThreadCheck } = params;
   const trimmedText = text.trim();
   if (!trimmedText) {
     return null;
   }
 
-  await ensureThreadForUser({ uid, threadId });
+  if (!skipThreadCheck) {
+    await ensureThreadForUser({ uid, threadId });
+  }
   const now = FieldValue.serverTimestamp();
   const messageRef = threadMessagesRef(threadId).doc();
 
@@ -145,10 +148,13 @@ export async function listThreadMessages(params: {
   uid: string;
   threadId: string;
   limit?: number;
+  skipThreadCheck?: boolean;
 }): Promise<AgentThreadMessage[]> {
-  const { uid, threadId } = params;
+  const { uid, threadId, skipThreadCheck } = params;
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
-  await assertThreadOwnership({ uid, threadId });
+  if (!skipThreadCheck) {
+    await assertThreadOwnership({ uid, threadId });
+  }
 
   const snapshot = await threadMessagesRef(threadId)
     .orderBy("createdAt", "desc")
@@ -174,6 +180,7 @@ export async function listThreadConversationForModel(params: {
   uid: string;
   threadId: string;
   limit?: number;
+  skipThreadCheck?: boolean;
 }) {
   const messages = await listThreadMessages(params);
   return messages

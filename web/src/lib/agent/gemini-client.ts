@@ -3,6 +3,7 @@ import {
   createUserContent,
   FunctionCallingConfigMode,
   GoogleGenAI,
+  type FunctionCall,
   type FunctionDeclaration,
 } from "@google/genai";
 import type { AgentConversationMessage, AgentPlan } from "@/lib/agent/types";
@@ -91,8 +92,9 @@ export async function generateGeminiAgentPlan(params: {
   conversation: AgentConversationMessage[];
   toolDeclarations: FunctionDeclaration[];
   systemInstruction: string;
+  onTextDelta?: (delta: string) => void | Promise<void>;
 }): Promise<AgentPlan> {
-  const { conversation, toolDeclarations, systemInstruction } = params;
+  const { conversation, toolDeclarations, systemInstruction, onTextDelta } = params;
   const client = getGeminiClient();
   const model = readModelName();
 
@@ -112,31 +114,72 @@ export async function generateGeminiAgentPlan(params: {
     throw new Error("Conversation is empty. Cannot run Gemini planning.");
   }
 
-  const response = await client.models.generateContent({
-    model,
-    contents,
-    config: {
-      systemInstruction,
-      temperature: 0.2,
-      tools: [{ functionDeclarations: toolDeclarations }],
-      toolConfig: {
-        functionCallingConfig: {
-          mode: FunctionCallingConfigMode.AUTO,
-        },
+  const generationConfig = {
+    systemInstruction,
+    temperature: 0.2,
+    tools: [{ functionDeclarations: toolDeclarations }],
+    toolConfig: {
+      functionCallingConfig: {
+        mode: FunctionCallingConfigMode.AUTO,
       },
     },
+  };
+
+  if (!onTextDelta) {
+    const response = await client.models.generateContent({
+      model,
+      contents,
+      config: generationConfig,
+    });
+
+    return {
+      model,
+      text: response.text ?? "",
+      functionCalls: response.functionCalls ?? [],
+      usage: response.usageMetadata
+        ? {
+            promptTokenCount: response.usageMetadata.promptTokenCount,
+            candidatesTokenCount: response.usageMetadata.candidatesTokenCount,
+            totalTokenCount: response.usageMetadata.totalTokenCount,
+          }
+        : null,
+    };
+  }
+
+  const stream = await client.models.generateContentStream({
+    model,
+    contents,
+    config: generationConfig,
   });
+
+  let text = "";
+  let functionCalls: FunctionCall[] = [];
+  let usage: AgentPlan["usage"] = null;
+
+  for await (const chunk of stream) {
+    const delta = chunk.text ?? "";
+    if (delta.length > 0) {
+      text += delta;
+      await onTextDelta(delta);
+    }
+
+    if (chunk.functionCalls?.length) {
+      functionCalls = chunk.functionCalls;
+    }
+
+    if (chunk.usageMetadata) {
+      usage = {
+        promptTokenCount: chunk.usageMetadata.promptTokenCount,
+        candidatesTokenCount: chunk.usageMetadata.candidatesTokenCount,
+        totalTokenCount: chunk.usageMetadata.totalTokenCount,
+      };
+    }
+  }
 
   return {
     model,
-    text: response.text ?? "",
-    functionCalls: response.functionCalls ?? [],
-    usage: response.usageMetadata
-      ? {
-          promptTokenCount: response.usageMetadata.promptTokenCount,
-          candidatesTokenCount: response.usageMetadata.candidatesTokenCount,
-          totalTokenCount: response.usageMetadata.totalTokenCount,
-        }
-      : null,
+    text,
+    functionCalls,
+    usage,
   };
 }
