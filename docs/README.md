@@ -7,8 +7,10 @@ This folder captures the long-term plan for building and operating the AI assist
 - Core web app is live on Firebase App Hosting with Google login + protected dashboard.
 - Google OAuth connector is wired for Gmail/Calendar actions.
 - Gmail send + Calendar create actions are functional from the dashboard.
-- Gmail approval gate (No / Yes once / Always allow recipient) is implemented in UI + API.
-- Repo was pushed to `origin/main` at commit `176a9dc`.
+- Agent runtime now uses Gemini with tool-calling via Vertex AI.
+- Threaded chat is live in dashboard with streamed assistant output.
+- Agent approval flow is implemented end-to-end (pending -> resolve -> execute/reject).
+- Repo is pushed to `origin/main` at commit `1f07408`.
 
 ## Files
 

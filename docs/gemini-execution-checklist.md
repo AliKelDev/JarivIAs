@@ -13,13 +13,13 @@ This checklist is the practical runbook for implementing Gemini in the current p
 
 ## 2. Cloud and IAM Setup
 
-- [ ] Confirm Vertex AI API is enabled:
+- [x] Confirm Vertex AI API is enabled:
 
 ```bash
 gcloud services enable aiplatform.googleapis.com --project jariv-agentic-portal-26-148
 ```
 
-- [ ] Grant App Hosting runtime service account Vertex AI usage:
+- [x] Grant App Hosting runtime service account Vertex AI usage:
 
 ```bash
 PROJECT_ID="jariv-agentic-portal-26-148"
@@ -35,50 +35,53 @@ Notes:
 
 ## 3. Dependencies and Config
 
-- [ ] Install Gemini SDK:
+- [x] Install Gemini SDK:
 
 ```bash
 cd web
 npm install @google/genai
 ```
 
-- [ ] Add runtime env vars in `web/apphosting.yaml`:
+- [x] Add runtime env vars in `web/apphosting.yaml`:
   - `GOOGLE_GENAI_USE_VERTEXAI=true`
   - `GOOGLE_CLOUD_PROJECT=jariv-agentic-portal-26-148`
   - `GOOGLE_CLOUD_LOCATION=us-central1`
   - `GEMINI_MODEL=gemini-2.5-flash`
 
-- [ ] Keep Gemini calls server-side only (never browser-exposed).
+- [x] Keep Gemini calls server-side only (never browser-exposed).
 
 ## 4. Code Implementation Steps
 
-- [ ] Create `web/src/lib/agent/types.ts` for shared runtime types.
-- [ ] Create `web/src/lib/agent/gemini-client.ts`:
+- [x] Create `web/src/lib/agent/types.ts` for shared runtime types.
+- [x] Create `web/src/lib/agent/gemini-client.ts`:
   - initialize `GoogleGenAI` client
   - define `generatePlan()` with typed output handling
-- [ ] Create `web/src/lib/agent/tool-registry.ts`:
+- [x] Create `web/src/lib/agent/tool-registry.ts`:
   - register `gmail_send`
   - register `calendar_event_create`
-- [ ] Create `web/src/lib/agent/policy.ts`:
+- [x] Create `web/src/lib/agent/policy.ts`:
   - central approval decisions
   - allowlist lookups
-- [ ] Create `web/src/lib/agent/orchestrator.ts`:
+- [x] Create `web/src/lib/agent/orchestrator.ts`:
   - planning loop
   - state transitions
   - action persistence
-- [ ] Refactor `web/src/app/api/agent/run/route.ts` to use orchestrator.
+- [x] Refactor `web/src/app/api/agent/run/route.ts` to use orchestrator.
+- [x] Add streaming route `web/src/app/api/agent/run/stream/route.ts`.
+- [x] Add thread route `web/src/app/api/agent/thread/route.ts`.
 
 ## 5. Approval Unification
 
-- [ ] Keep existing Gmail approval flow operational during migration.
-- [ ] Move decision logic into shared policy functions.
-- [ ] Ensure all side-effect tools pass through the same policy gate.
-- [ ] Add explicit run state `awaiting_confirmation` with resumable payload.
+- [x] Keep existing Gmail approval flow operational during migration.
+- [x] Move decision logic into shared policy functions.
+- [x] Ensure all side-effect tools pass through the same policy gate.
+- [x] Add explicit run state `awaiting_confirmation` with resumable payload.
+- [x] Add approval resolve flow (`/api/agent/approvals/resolve`).
 
 ## 6. Testing Checklist
 
-- [ ] `npm run lint`
-- [ ] `npm run build`
+- [x] `npm run lint`
+- [x] `npm run build`
 - [ ] Manual smoke tests:
   - prompt with no tool call
   - prompt that proposes Gmail send -> approval required
@@ -116,9 +119,9 @@ firebase deploy --only apphosting --project jariv-agentic-portal-26-148
 
 ## 9. Definition of Done
 
-- [ ] `/api/agent/run` uses Gemini planning in production.
-- [ ] Gmail and Calendar tool calls execute through one policy/approval path.
-- [ ] All side-effect actions are auditable and recoverable.
+- [x] `/api/agent/run` uses Gemini planning in production.
+- [x] Gmail and Calendar tool calls execute through one policy/approval path.
+- [x] All side-effect actions are auditable and recoverable (V1 baseline).
 - [ ] Smoke tests pass on hosted deployment.
 
 ## 10. References

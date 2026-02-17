@@ -4,7 +4,7 @@ Last updated: 2026-02-17
 
 ## 1. Objective
 
-Replace the current `/api/agent/run` stub with a production-safe Gemini planning + tool-calling runtime that:
+Run a production-safe Gemini planning + tool-calling runtime that:
 
 - Plans actions from user prompts.
 - Calls registered tools (Gmail, Calendar, later Slack, etc.).
@@ -18,6 +18,13 @@ Replace the current `/api/agent/run` stub with a production-safe Gemini planning
 - Gmail send endpoint and Calendar create endpoint.
 - Gmail approval gate (reject / approve once / approve and allow recipient).
 - Firestore collections for `runs`, `runs/{runId}/actions`, and `audit`.
+- Gemini runtime routes are active:
+  - `/api/agent/run`
+  - `/api/agent/run/stream`
+  - `/api/agent/thread`
+  - `/api/agent/approvals/pending`
+  - `/api/agent/approvals/resolve`
+- Dashboard includes threaded chat with streamed assistant output and inline approval cards.
 
 ## 3. Gemini Stack Decision
 
@@ -64,6 +71,7 @@ New code areas to add:
 
 ## Phase A: Infrastructure + SDK Wiring
 
+- Status: `Completed`
 - Add `@google/genai`.
 - Add runtime env vars in `web/apphosting.yaml`.
 - Verify App Hosting service account has Vertex AI access.
@@ -75,6 +83,7 @@ Exit criteria:
 
 ## Phase B: Tool Calling Contracts
 
+- Status: `Completed`
 - Define tool registry interface with JSON schemas.
 - Register existing Gmail + Calendar functions as tools.
 - Add strict input validation before any tool execution.
@@ -85,6 +94,7 @@ Exit criteria:
 
 ## Phase C: Approval-Aware Execution
 
+- Status: `Completed (V1 baseline)`
 - Unify existing Gmail approval behavior into central policy engine.
 - Add `awaiting_confirmation` run state transitions.
 - Persist pending action payloads in Firestore.
@@ -95,9 +105,11 @@ Exit criteria:
 
 ## Phase D: Dashboard Integration
 
-- Replace “agent stub” UX with real Gemini-backed runs.
+- Status: `Completed (initial)`
+- Keep the dashboard on real Gemini-backed runs with consistent UX.
 - Show pending approvals and recent action results in one stream.
 - Keep manual action cards available for deterministic debugging.
+- Stream assistant text deltas in chat while the run is executing.
 
 Exit criteria:
 
@@ -105,6 +117,7 @@ Exit criteria:
 
 ## Phase E: Hardening
 
+- Status: `In progress`
 - Add retries/idempotency for side-effect actions.
 - Add structured error mapping and redaction-safe logs.
 - Add integration tests and smoke tests for deploy validation.

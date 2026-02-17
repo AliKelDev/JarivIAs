@@ -48,3 +48,22 @@ Revisit if:
 
 1. Strong role-based policy engine and audit stream are fully in place.
 2. Additional tools (calendar update, messaging) are routed through centralized policy checks.
+
+## 2026-02-17: Thread-First Agent UX with Streaming
+
+### Decision
+
+Use a thread-first chat surface as the primary agent interaction model and stream assistant text tokens to the UI via a dedicated streaming route.
+
+### Why
+
+- The model naturally asks follow-up questions when user intent is underspecified.
+- A chat transcript is the most stable UX for multi-turn planning and approval workflows.
+- Streaming improves perceived latency even when backend orchestration includes storage and policy steps.
+
+### Revisit Conditions
+
+Revisit if:
+
+1. A task-centric UI outperforms chat for the dominant user workflows.
+2. Production telemetry shows streaming overhead or complexity outweighs UX gains.

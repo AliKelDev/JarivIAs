@@ -4,7 +4,7 @@ Last updated: 2026-02-17
 
 ## 1. Purpose
 
-Define the exact runtime behavior for replacing the current stub in `web/src/app/api/agent/run/route.ts` with a real Gemini orchestrator.
+Define the exact runtime behavior for the Gemini orchestrator in `web/src/app/api/agent/run/route.ts`.
 
 ## 2. Route Contract
 
@@ -36,6 +36,15 @@ Response (synchronous shape for V1):
 }
 ```
 
+Streaming route (`POST /api/agent/run/stream`):
+
+- Content type: `application/x-ndjson`
+- Event sequence:
+  - `{"type":"status","status":"planning","threadId":"..."}`
+  - repeated `{"type":"delta","delta":"..."}` events
+  - final `{"type":"result","result":{...run response...}}`
+  - or `{"type":"error","error":"..."}`
+
 ## 3. Runtime States
 
 Run states:
@@ -59,23 +68,26 @@ Action states:
 ## 4. Core Loop
 
 1. Validate auth/session user.
-2. Persist run with `queued -> planning`.
-3. Call Gemini with:
+2. Ensure thread ownership and append the new user message.
+3. Persist run with `queued -> planning`.
+4. Call Gemini with:
    - system instructions (policy + persona)
+   - recent thread conversation history
    - user prompt
    - tool declarations
-4. Parse model response:
+5. Parse model response:
    - no tool call: produce assistant reply, mark completed
    - tool call(s): validate args and pass through policy gate
-5. If approval required:
+6. If approval required:
    - persist pending action
    - mark run `awaiting_confirmation`
+   - append assistant approval-request message to thread
    - return pending approval payload
-6. If no approval required:
+7. If no approval required:
    - execute tool
    - persist output + audit
-   - continue loop (bounded iterations)
-7. Finalize run with summary + timestamps.
+   - append assistant completion message to thread
+8. Finalize run with summary + timestamps.
 
 Max loop count (V1): `3`.
 
@@ -129,19 +141,18 @@ Rules (V1):
 
 ## 7. Approval Resume Flow
 
-Existing Gmail approval endpoints should evolve into generic action approval:
+Generic agent approval routes are in place:
+
+- `/api/agent/approvals/pending`
+- `/api/agent/approvals/resolve`
+
+Behavior:
 
 - Request stage stores `pendingAction` document keyed by `approvalId`.
 - Resolve stage maps decision:
   - `reject` -> action `rejected`, run `failed` or `completed` (policy choice)
   - `approve_once` -> execute once
   - `approve_and_always_allow_recipient` -> persist allowlist + execute
-
-Future target:
-
-- Replace Gmail-specific route names with generic routes:
-  - `/api/agent/approvals/request`
-  - `/api/agent/approvals/resolve`
 
 ## 8. Error Taxonomy
 

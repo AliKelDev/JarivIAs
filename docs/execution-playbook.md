@@ -38,11 +38,11 @@ Definition of done:
 ## Phase 1: Agent Core
 
 - [x] Implement server-side agent endpoint.
-- [ ] Add Gemini model wrapper with function calling.
-- [ ] Build tool registry interface.
+- [x] Add Gemini model wrapper with function calling.
+- [x] Build tool registry interface.
 - [ ] Add policy engine (role + approval + quotas).
-- [ ] Add run state machine persistence.
-- [ ] Add basic conversation/thread persistence.
+- [x] Add run state machine persistence.
+- [x] Add basic conversation/thread persistence.
 
 Definition of done:
 
@@ -65,10 +65,10 @@ Definition of done:
 
 ## Phase 3: Approval + Audit
 
-- [x] Build UI action confirmation cards (Gmail flow implemented).
-- [ ] Pause runs in `awaiting_confirmation`.
-- [ ] Resume runs after user approval.
-- [ ] Add immutable audit event writes.
+- [x] Build UI action confirmation cards (manual + agent flow).
+- [x] Pause runs in `awaiting_confirmation`.
+- [x] Resume runs after user approval.
+- [x] Add immutable audit event writes (append-only baseline in `audit` collection).
 - [ ] Expose Activity view with filters.
 
 Definition of done:
@@ -199,10 +199,16 @@ Use this section to keep a running record.
   - Dashboard readability fixes deployed.
   - Repo committed and pushed to `origin/main`.
   - Git ignores tightened for local secret/artifact hygiene.
+  - Gemini runtime integrated (`/api/agent/run`) with tool-calling and policy checks.
+  - Agent approval APIs added (`/api/agent/approvals/pending`, `/api/agent/approvals/resolve`).
+  - Threaded chat persistence added (`threads/{threadId}/messages`) and loaded in dashboard.
+  - Streaming endpoint added (`/api/agent/run/stream`) with live token deltas in chat UI.
+  - Pre-planning Firestore path optimized to reduce perceived latency.
 - Blockers:
-  - None for current manual flow.
+  - None for current local flow.
 - Decisions:
   - Keep `Next.js + Firebase App Hosting` as V1 stack baseline.
   - Keep `docs/wake-up-story.md` private via git ignore.
+  - Keep long-context thread history strategy (no aggressive short-window truncation).
 - Next:
-  - Move approval from manual tool flow into generic agent policy/state-machine path.
+  - Add Activity page and deeper observability (latency + token/cost metrics).

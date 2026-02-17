@@ -51,7 +51,12 @@ Last updated: 2026-02-17
     - `/login` Google sign-in page
     - Session cookie auth routes (`/api/auth/session-login`, `/api/auth/session-logout`)
     - Protected `/dashboard` page
-    - Auth-gated agent stub route (`/api/agent/run`) writing runs/actions to Firestore
+    - Gemini-backed agent routes:
+      - `/api/agent/run`
+      - `/api/agent/run/stream` (NDJSON token streaming)
+      - `/api/agent/thread` (thread messages + pending approvals)
+      - `/api/agent/approvals/pending`
+      - `/api/agent/approvals/resolve`
     - Google Workspace OAuth connector flow:
       - `/api/oauth/google/start`
       - `/api/oauth/google/callback`
@@ -62,15 +67,23 @@ Last updated: 2026-02-17
       - `/api/tools/gmail/approval/request`
       - `/api/tools/gmail/approval/resolve`
   - Dashboard updates:
-    - Gmail approval UX with decision options:
-      - No (optional feedback)
-      - Yes (approve once)
-      - Yes and always allow this recipient
+    - Agent chat thread with persisted conversation history.
+    - Streaming assistant output during run execution.
+    - In-chat approval cards for side-effect actions.
+    - Manual Gmail approval UX retained for deterministic testing.
     - Readability fixes for dashboard text/colors
 - Firestore config:
   - `firestore.rules` set to deny all by default
   - `firestore.indexes.json` initialized
   - Rules + indexes deployed to cloud
+
+## Vertex AI Runtime Access
+
+- Vertex API enabled and validated for the project.
+- App Hosting runtime service account verified:
+  - `firebase-app-hosting-compute@jariv-agentic-portal-26-148.iam.gserviceaccount.com`
+- IAM role granted for Gemini runtime:
+  - `roles/aiplatform.user`
 
 ## Repo Hygiene and Push Status (2026-02-17)
 
@@ -81,7 +94,7 @@ Last updated: 2026-02-17
 - Web ignore adjusted to allow committing example env template:
   - `web/.gitignore` includes `!.env.example`
 - Commit and push:
-  - Commit: `176a9dc`
+  - Commit: `1f07408`
   - Branch: `main`
   - Remote: `origin/main`
 
@@ -102,13 +115,15 @@ firebase init apphosting
 firebase init firestore
 firebase deploy --only apphosting --project jariv-agentic-portal-26-148
 firebase deploy --only firestore --project jariv-agentic-portal-26-148
-npm install firebase firebase-admin @opentelemetry/api googleapis
+npm install firebase firebase-admin @opentelemetry/api googleapis @google/genai
+gcloud projects add-iam-policy-binding jariv-agentic-portal-26-148 --member="serviceAccount:firebase-app-hosting-compute@jariv-agentic-portal-26-148.iam.gserviceaccount.com" --role="roles/aiplatform.user"
+gcloud auth application-default login
 ```
 
 ## Immediate Next Steps
 
-1. Generalize approval gating so all side-effect tools route through a single policy layer.
-2. Replace agent stub with Gemini planning wrapper and function-calling loop.
-3. Add run state transitions for `awaiting_confirmation -> executing -> completed/failed`.
-4. Build real dashboard surfaces (`/chat`, `/integrations`, `/activity`) with execution history.
-5. Add token-at-rest encryption for stored OAuth credentials.
+1. Add dedicated Activity view with filters over runs/actions/audit.
+2. Add explicit idempotency keys for side-effect action execution.
+3. Add structured latency instrumentation per stage (thread read, model call, tool exec).
+4. Add token-at-rest encryption for stored OAuth credentials.
+5. Add integration and regression tests for stream + approval resume flow.

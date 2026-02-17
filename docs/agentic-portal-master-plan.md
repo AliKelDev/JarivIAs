@@ -17,6 +17,7 @@ The platform should be hosted on Firebase/GCP and use Gemini for planning and to
 - Live app on Firebase App Hosting with Google auth/session flow.
 - Protected dashboard available at `/dashboard`.
 - Google OAuth connector for Gmail/Calendar is operational.
+- Agent runtime is Gemini-backed (Vertex AI) with registered tool adapters.
 - Working tool actions:
   - `gmail_send`
   - `calendar_event_create`
@@ -24,7 +25,8 @@ The platform should be hosted on Firebase/GCP and use Gemini for planning and to
   - Reject
   - Approve once
   - Approve and allow recipient
-- Agent orchestration is still stubbed and must be replaced with Gemini-driven planning loop.
+- Agent approvals are resumable via API and rendered inline in chat.
+- Dashboard chat persists thread history and streams assistant output.
 
 ## 2. V1 Product Scope
 
