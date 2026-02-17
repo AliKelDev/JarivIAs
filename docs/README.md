@@ -2,6 +2,14 @@
 
 This folder captures the long-term plan for building and operating the AI assistant portal.
 
+## Status Snapshot (2026-02-17)
+
+- Core web app is live on Firebase App Hosting with Google login + protected dashboard.
+- Google OAuth connector is wired for Gmail/Calendar actions.
+- Gmail send + Calendar create actions are functional from the dashboard.
+- Gmail approval gate (No / Yes once / Always allow recipient) is implemented in UI + API.
+- Repo was pushed to `origin/main` at commit `176a9dc`.
+
 ## Files
 
 - `docs/agentic-portal-master-plan.md`

@@ -1,6 +1,6 @@
 # Agentic Portal Master Plan
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 
 ## 1. Goal
 
@@ -11,6 +11,20 @@ Build a web portal where users sign in with Google and use an AI assistant to pe
 - Send messages via a selected messaging connector
 
 The platform should be hosted on Firebase/GCP and use Gemini for planning and tool-calling.
+
+## 1.1 Current Build Snapshot (2026-02-17)
+
+- Live app on Firebase App Hosting with Google auth/session flow.
+- Protected dashboard available at `/dashboard`.
+- Google OAuth connector for Gmail/Calendar is operational.
+- Working tool actions:
+  - `gmail_send`
+  - `calendar_event_create`
+- Gmail approval gate is implemented with three decisions:
+  - Reject
+  - Approve once
+  - Approve and allow recipient
+- Agent orchestration is still stubbed and must be replaced with Gemini-driven planning loop.
 
 ## 2. V1 Product Scope
 

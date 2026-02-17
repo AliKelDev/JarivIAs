@@ -1,5 +1,7 @@
 # Bootstrap Status (2026-02-16)
 
+Last updated: 2026-02-17
+
 ## Current Owner Context
 
 - Primary Google account for this build: `j.montee.ls@gmail.com`
@@ -57,10 +59,31 @@
     - Tool endpoints:
       - `/api/tools/gmail/send`
       - `/api/tools/calendar/create`
+      - `/api/tools/gmail/approval/request`
+      - `/api/tools/gmail/approval/resolve`
+  - Dashboard updates:
+    - Gmail approval UX with decision options:
+      - No (optional feedback)
+      - Yes (approve once)
+      - Yes and always allow this recipient
+    - Readability fixes for dashboard text/colors
 - Firestore config:
   - `firestore.rules` set to deny all by default
   - `firestore.indexes.json` initialized
   - Rules + indexes deployed to cloud
+
+## Repo Hygiene and Push Status (2026-02-17)
+
+- Root `.gitignore` hardened for local secrets/artifacts:
+  - `.env.*`, `*.local`, key/cert files, service-account/client-secret JSON patterns
+- Private story kept local only:
+  - `docs/wake-up-story.md` is ignored by git
+- Web ignore adjusted to allow committing example env template:
+  - `web/.gitignore` includes `!.env.example`
+- Commit and push:
+  - Commit: `176a9dc`
+  - Branch: `main`
+  - Remote: `origin/main`
 
 ## Commands Already Run Successfully
 
@@ -84,8 +107,8 @@ npm install firebase firebase-admin @opentelemetry/api googleapis
 
 ## Immediate Next Steps
 
-1. End-to-end test live OAuth connect + Gmail send + Calendar create from dashboard.
+1. Generalize approval gating so all side-effect tools route through a single policy layer.
 2. Replace agent stub with Gemini planning wrapper and function-calling loop.
-3. Add tool registry + policy checks (approval-required by default).
+3. Add run state transitions for `awaiting_confirmation -> executing -> completed/failed`.
 4. Build real dashboard surfaces (`/chat`, `/integrations`, `/activity`) with execution history.
 5. Add token-at-rest encryption for stored OAuth credentials.

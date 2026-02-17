@@ -1,6 +1,6 @@
 # Execution Playbook
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 
 This file is the operational checklist for building the agentic portal from scratch to launch.
 
@@ -29,11 +29,11 @@ This file is the operational checklist for building the agentic portal from scra
 - [ ] Connect GitHub repo to App Hosting backend.
 - [x] Add Firebase Auth Google sign-in.
 - [x] Implement server session cookie flow.
-- [ ] Build dashboard shell (Chat, Tasks, Integrations, Activity, Settings).
+- [x] Build dashboard shell (current V1 surface in `/dashboard`).
 
 Definition of done:
 
-- [ ] User can log in with Google and load authenticated dashboard.
+- [x] User can log in with Google and load authenticated dashboard.
 
 ## Phase 1: Agent Core
 
@@ -61,11 +61,11 @@ Definition of done:
 
 Definition of done:
 
-- [ ] Agent can complete one Gmail action and one Calendar action end-to-end.
+- [x] Portal can complete one Gmail action and one Calendar action end-to-end.
 
 ## Phase 3: Approval + Audit
 
-- [ ] Build UI action confirmation cards.
+- [x] Build UI action confirmation cards (Gmail flow implemented).
 - [ ] Pause runs in `awaiting_confirmation`.
 - [ ] Resume runs after user approval.
 - [ ] Add immutable audit event writes.
@@ -191,3 +191,18 @@ Use this section to keep a running record.
 - Decisions:
 - Next:
 ```
+
+## 2026-02-17
+
+- Completed:
+  - Gmail approval gate added (request + resolve API + dashboard UI decisions).
+  - Dashboard readability fixes deployed.
+  - Repo committed and pushed to `origin/main`.
+  - Git ignores tightened for local secret/artifact hygiene.
+- Blockers:
+  - None for current manual flow.
+- Decisions:
+  - Keep `Next.js + Firebase App Hosting` as V1 stack baseline.
+  - Keep `docs/wake-up-story.md` private via git ignore.
+- Next:
+  - Move approval from manual tool flow into generic agent policy/state-machine path.

@@ -29,3 +29,22 @@ Revisit if:
 
 1. Product becomes frontend-only for a major surface.
 2. Team intentionally chooses a split architecture (`SPA + dedicated API platform`) for scaling or org reasons.
+
+## 2026-02-17: Approval Policy Baseline for Side Effects
+
+### Decision
+
+Ship V1 with explicit approval UX for Gmail send and retain a recipient allowlist option (`always allow this recipient`) to reduce repetitive confirmations for trusted contacts.
+
+### Why
+
+- Prevent accidental high-impact side effects from agent/tool actions.
+- Keep UX practical for repeated manual operations.
+- Establish a policy primitive that can later be reused by the full agent runtime.
+
+### Revisit Conditions
+
+Revisit if:
+
+1. Strong role-based policy engine and audit stream are fully in place.
+2. Additional tools (calendar update, messaging) are routed through centralized policy checks.
