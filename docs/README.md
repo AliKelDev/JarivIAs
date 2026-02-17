@@ -16,6 +16,12 @@ This folder captures the long-term plan for building and operating the AI assist
   - Product scope, architecture, security model, data model, roadmap, risks.
 - `docs/execution-playbook.md`
   - Step-by-step implementation checklist, command checklist, release checklist, and operating cadence.
+- `docs/gemini-integration-roadmap.md`
+  - Gemini-specific architecture decisions and phased integration plan for this codebase.
+- `docs/gemini-agent-runtime-spec.md`
+  - Detailed runtime contract for function calling, tool dispatch, approvals, and run persistence.
+- `docs/gemini-execution-checklist.md`
+  - Concrete implementation checklist and CLI runbook for enabling Gemini in production safely.
 - `docs/bootstrap-status-2026-02-16.md`
   - Concrete bootstrap status for the current cloud project, deployed backend, and next implementation steps.
 - `docs/decision-log.md`
