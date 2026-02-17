@@ -19,6 +19,17 @@ type RunResponse = {
   threadId: string;
   status: string;
   summary: string;
+  mode?: string;
+  model?: string;
+  tool?: string;
+  toolArgs?: Record<string, unknown>;
+  approval?: {
+    id: string;
+    tool: string;
+    reason: string;
+    preview: string;
+  };
+  output?: Record<string, unknown>;
 };
 
 type GoogleIntegrationStatus = {
@@ -36,6 +47,38 @@ type GmailPendingApproval = {
   subject: string;
   bodyPreview: string;
 };
+
+type AgentPendingApproval = {
+  id: string;
+  tool: string;
+  reason: string;
+  preview: string;
+  runId?: string;
+  actionId?: string;
+};
+
+type AgentPendingApprovalsResponse = {
+  ok: boolean;
+  pending: Array<{
+    id: string;
+    tool: string;
+    reason: string;
+    preview: string;
+    runId: string;
+    actionId: string;
+  }>;
+};
+
+function isAgentPendingApprovalsResponse(
+  value: unknown,
+): value is AgentPendingApprovalsResponse {
+  if (!value || typeof value !== "object" || !("pending" in value)) {
+    return false;
+  }
+
+  const pending = (value as AgentPendingApprovalsResponse).pending;
+  return Array.isArray(pending);
+}
 
 function readErrorMessage(value: unknown, fallback: string): string {
   if (
@@ -73,6 +116,12 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
   const [runResult, setRunResult] = useState<RunResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [agentPendingApproval, setAgentPendingApproval] =
+    useState<AgentPendingApproval | null>(null);
+  const [agentApprovalFeedback, setAgentApprovalFeedback] = useState("");
+  const [agentApprovalSubmitting, setAgentApprovalSubmitting] = useState(false);
+  const [agentApprovalError, setAgentApprovalError] = useState<string | null>(null);
+  const [agentApprovalResult, setAgentApprovalResult] = useState<ToolResult>(null);
 
   const [integrationLoading, setIntegrationLoading] = useState(true);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
@@ -140,14 +189,57 @@ export function DashboardClient({ user }: DashboardClientProps) {
     }
   }
 
+  async function refreshAgentPendingApproval() {
+    setAgentApprovalError(null);
+    try {
+      const response = await fetch("/api/agent/approvals/pending?limit=1", {
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => null)) as
+        | AgentPendingApprovalsResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(readErrorMessage(body, "Failed to fetch approvals."));
+      }
+
+      const first = isAgentPendingApprovalsResponse(body)
+        ? body.pending[0]
+        : null;
+      if (!first) {
+        setAgentPendingApproval(null);
+        return;
+      }
+
+      setAgentPendingApproval({
+        id: first.id,
+        tool: first.tool,
+        reason: first.reason,
+        preview: first.preview,
+        runId: first.runId,
+        actionId: first.actionId,
+      });
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to fetch pending agent approval.";
+      setAgentApprovalError(message);
+    }
+  }
+
   useEffect(() => {
     void refreshGoogleStatus();
+    void refreshAgentPendingApproval();
   }, []);
 
   async function handleRunAgentStub() {
     setIsSubmittingRun(true);
     setRunError(null);
     setRunResult(null);
+    setAgentApprovalError(null);
+    setAgentApprovalResult(null);
 
     try {
       const response = await fetch("/api/agent/run", {
@@ -167,7 +259,25 @@ export function DashboardClient({ user }: DashboardClientProps) {
         throw new Error(message || "Agent run failed.");
       }
 
-      setRunResult(body as RunResponse);
+      const runResponse = body as RunResponse;
+      setRunResult(runResponse);
+
+      if (
+        runResponse.mode === "requires_approval" &&
+        runResponse.approval?.id &&
+        runResponse.approval.tool
+      ) {
+        setAgentPendingApproval({
+          id: runResponse.approval.id,
+          tool: runResponse.approval.tool,
+          reason: runResponse.approval.reason,
+          preview: runResponse.approval.preview,
+          runId: runResponse.runId,
+          actionId: runResponse.actionId,
+        });
+      } else {
+        void refreshAgentPendingApproval();
+      }
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -279,6 +389,53 @@ export function DashboardClient({ user }: DashboardClientProps) {
       setGmailError(message);
     } finally {
       setGmailDecisionSubmitting(false);
+    }
+  }
+
+  async function handleResolveAgentApproval(
+    decision: "reject" | "approve_once" | "approve_and_always_allow_recipient",
+  ) {
+    if (!agentPendingApproval) {
+      return;
+    }
+
+    setAgentApprovalSubmitting(true);
+    setAgentApprovalError(null);
+    setAgentApprovalResult(null);
+
+    try {
+      const response = await fetch("/api/agent/approvals/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approvalId: agentPendingApproval.id,
+          decision,
+          feedback: agentApprovalFeedback,
+        }),
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | Record<string, unknown>
+        | null;
+
+      if (!response.ok) {
+        throw new Error(
+          readErrorMessage(body, "Failed to resolve agent approval."),
+        );
+      }
+
+      setAgentApprovalResult(body as Record<string, unknown>);
+      setAgentPendingApproval(null);
+      setAgentApprovalFeedback("");
+      await refreshAgentPendingApproval();
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to resolve agent approval.";
+      setAgentApprovalError(message);
+    } finally {
+      setAgentApprovalSubmitting(false);
     }
   }
 
@@ -538,6 +695,67 @@ export function DashboardClient({ user }: DashboardClientProps) {
           >
             {isSubmittingRun ? "Running..." : "Run Agent"}
           </button>
+
+          {agentPendingApproval ? (
+            <div className={styles.approvalCard}>
+              <p className={styles.approvalTitle}>Agent Approval Required</p>
+              <p className={styles.meta}>
+                Tool: <strong>{agentPendingApproval.tool}</strong>
+              </p>
+              <p className={styles.meta}>{agentPendingApproval.reason}</p>
+              <pre className={styles.result}>{agentPendingApproval.preview}</pre>
+              <label className={styles.label}>
+                If rejecting, what should change? (optional)
+                <textarea
+                  className={styles.textarea}
+                  value={agentApprovalFeedback}
+                  onChange={(event) => setAgentApprovalFeedback(event.target.value)}
+                  placeholder="e.g., adjust recipient/date/content..."
+                />
+              </label>
+              <div className={styles.buttonRow}>
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  onClick={() => void handleResolveAgentApproval("reject")}
+                  disabled={agentApprovalSubmitting}
+                >
+                  {agentApprovalSubmitting ? "Working..." : "No"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.runButton}
+                  onClick={() => void handleResolveAgentApproval("approve_once")}
+                  disabled={agentApprovalSubmitting}
+                >
+                  {agentApprovalSubmitting ? "Working..." : "Yes"}
+                </button>
+                {agentPendingApproval.tool === "gmail_send" ? (
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() =>
+                      void handleResolveAgentApproval(
+                        "approve_and_always_allow_recipient",
+                      )
+                    }
+                    disabled={agentApprovalSubmitting}
+                  >
+                    {agentApprovalSubmitting
+                      ? "Working..."
+                      : "Yes and always allow for this recipient"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {agentApprovalError ? <p className={styles.error}>{agentApprovalError}</p> : null}
+          {agentApprovalResult ? (
+            <pre className={styles.result}>
+              {JSON.stringify(agentApprovalResult, null, 2)}
+            </pre>
+          ) : null}
           {runError ? <p className={styles.error}>{runError}</p> : null}
           {runResult ? (
             <pre className={styles.result}>{JSON.stringify(runResult, null, 2)}</pre>
