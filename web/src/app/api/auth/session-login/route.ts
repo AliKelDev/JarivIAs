@@ -46,9 +46,24 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch {
+  } catch (caughtError) {
+    const message =
+      caughtError instanceof Error
+        ? caughtError.message
+        : "Unable to create session cookie.";
+
+    // Keep detailed diagnostics local-only so production responses stay minimal.
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Session login failed:", caughtError);
+    }
+
     return NextResponse.json(
-      { error: "Unable to create session cookie." },
+      {
+        error:
+          process.env.NODE_ENV !== "production"
+            ? `Unable to create session cookie. ${message}`
+            : "Unable to create session cookie.",
+      },
       { status: 401 },
     );
   }

@@ -1,9 +1,11 @@
 import {
+  createModelContent,
+  createUserContent,
   FunctionCallingConfigMode,
   GoogleGenAI,
   type FunctionDeclaration,
 } from "@google/genai";
-import type { AgentPlan } from "@/lib/agent/types";
+import type { AgentConversationMessage, AgentPlan } from "@/lib/agent/types";
 
 let cachedClient: GoogleGenAI | null = null;
 let cachedClientKey: string | null = null;
@@ -86,17 +88,33 @@ export function getGeminiModelName(): string {
 }
 
 export async function generateGeminiAgentPlan(params: {
-  prompt: string;
+  conversation: AgentConversationMessage[];
   toolDeclarations: FunctionDeclaration[];
   systemInstruction: string;
 }): Promise<AgentPlan> {
-  const { prompt, toolDeclarations, systemInstruction } = params;
+  const { conversation, toolDeclarations, systemInstruction } = params;
   const client = getGeminiClient();
   const model = readModelName();
 
+  const contents = conversation
+    .map((message) => {
+      const text = message.text.trim();
+      if (!text) {
+        return null;
+      }
+      return message.role === "assistant"
+        ? createModelContent(text)
+        : createUserContent(text);
+    })
+    .filter((value): value is NonNullable<typeof value> => Boolean(value));
+
+  if (contents.length === 0) {
+    throw new Error("Conversation is empty. Cannot run Gemini planning.");
+  }
+
   const response = await client.models.generateContent({
     model,
-    contents: prompt,
+    contents,
     config: {
       systemInstruction,
       temperature: 0.2,
@@ -104,9 +122,6 @@ export async function generateGeminiAgentPlan(params: {
       toolConfig: {
         functionCallingConfig: {
           mode: FunctionCallingConfigMode.AUTO,
-          allowedFunctionNames: toolDeclarations
-            .map((tool) => tool.name)
-            .filter((name): name is string => Boolean(name)),
         },
       },
     },

@@ -2,6 +2,11 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getGeminiModelName, generateGeminiAgentPlan } from "@/lib/agent/gemini-client";
 import { evaluateAgentToolPolicy } from "@/lib/agent/policy";
 import { getAgentToolSet } from "@/lib/agent/tool-registry";
+import {
+  appendThreadMessage,
+  ensureThreadForUser,
+  listThreadConversationForModel,
+} from "@/lib/agent/thread";
 import type {
   AgentRunRequest,
   AgentRunResponse,
@@ -65,6 +70,29 @@ async function markRunFailed(params: {
 
 function buildToolNotFoundMessage(toolName: string): string {
   return `Model requested unsupported tool "${toolName}".`;
+}
+
+async function persistAssistantThreadMessage(params: {
+  uid: string;
+  threadId: string;
+  text: string;
+  runId: string;
+  actionId: string;
+}) {
+  const { uid, threadId, text, runId, actionId } = params;
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  await appendThreadMessage({
+    uid,
+    threadId,
+    role: "assistant",
+    text: trimmed,
+    runId,
+    actionId,
+  });
 }
 
 async function persistPendingApproval(params: {
@@ -161,8 +189,29 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
   const modelName = getGeminiModelName();
 
   try {
+    await ensureThreadForUser({
+      uid: request.uid,
+      threadId: request.threadId,
+      source: request.source,
+    });
+
+    await appendThreadMessage({
+      uid: request.uid,
+      threadId: request.threadId,
+      role: "user",
+      text: request.prompt,
+      runId: runRef.id,
+      actionId: actionRef.id,
+    });
+
+    const conversation = await listThreadConversationForModel({
+      uid: request.uid,
+      threadId: request.threadId,
+      limit: 30,
+    });
+
     const plan = await generateGeminiAgentPlan({
-      prompt: request.prompt,
+      conversation,
       toolDeclarations: toolSet.declarations,
       systemInstruction: AGENT_SYSTEM_INSTRUCTION,
     });
@@ -202,6 +251,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         { merge: true },
       );
 
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text,
+        runId: runRef.id,
+        actionId: actionRef.id,
+      });
+
       return {
         ok: true,
         runId: runRef.id,
@@ -235,6 +292,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         runRefPath,
         actionRefPath,
         message,
+      });
+
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: message,
+        runId: runRef.id,
+        actionId: actionRef.id,
       });
 
       return {
@@ -273,6 +338,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         runRefPath,
         actionRefPath,
         message,
+      });
+
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: message,
+        runId: runRef.id,
+        actionId: actionRef.id,
       });
 
       return {
@@ -333,6 +406,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         message,
       });
 
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: message,
+        runId: runRef.id,
+        actionId: actionRef.id,
+      });
+
       return {
         ok: true,
         runId: runRef.id,
@@ -378,6 +459,11 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
       });
 
       const summary = `${tool.name} is awaiting approval: ${policy.reason}`;
+      const assistantApprovalPrompt = [
+        `I can run this action, but I need your approval first.`,
+        `Tool: ${tool.name}.`,
+        `Plan: ${pendingApproval.preview}`,
+      ].join(" ");
       await runRef.set(
         {
           status: "awaiting_confirmation",
@@ -389,6 +475,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         },
         { merge: true },
       );
+
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: assistantApprovalPrompt,
+        runId: runRef.id,
+        actionId: actionRef.id,
+      });
 
       return {
         ok: true,
@@ -463,6 +557,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         { merge: true },
       );
 
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: summary,
+        runId: runRef.id,
+        actionId: actionRef.id,
+      });
+
       return {
         ok: true,
         runId: runRef.id,
@@ -496,6 +598,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         runRefPath,
         actionRefPath,
         message,
+      });
+
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: message,
+        runId: runRef.id,
+        actionId: actionRef.id,
       });
 
       return {
@@ -538,6 +648,18 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
       actionRefPath,
       message,
     });
+
+    try {
+      await persistAssistantThreadMessage({
+        uid: request.uid,
+        threadId: request.threadId,
+        text: message,
+        runId: runRef.id,
+        actionId: actionRef.id,
+      });
+    } catch {
+      // Ignore secondary chat persistence failures in error path.
+    }
 
     return {
       ok: true,

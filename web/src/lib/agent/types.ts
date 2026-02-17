@@ -104,3 +104,8 @@ export type AgentToolSet = {
   declarations: FunctionDeclaration[];
   byName: Map<string, AgentToolDefinition>;
 };
+
+export type AgentConversationMessage = {
+  role: "user" | "assistant";
+  text: string;
+};

@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth/session";
+import { appendThreadMessage } from "@/lib/agent/thread";
 import { getAgentToolSet } from "@/lib/agent/tool-registry";
 import type { AgentApprovalDecision, AgentToolArgs } from "@/lib/agent/types";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
@@ -25,6 +26,32 @@ type StoredAgentApproval = {
   actionId?: string;
   threadId?: string;
 };
+
+async function appendAssistantMessageForThread(params: {
+  uid: string;
+  threadId: string;
+  text: string;
+  runId: string;
+  actionId: string;
+}) {
+  const { uid, threadId, text, runId, actionId } = params;
+  if (!threadId || !text.trim()) {
+    return;
+  }
+
+  try {
+    await appendThreadMessage({
+      uid,
+      threadId,
+      role: "assistant",
+      text: text.trim(),
+      runId,
+      actionId,
+    });
+  } catch {
+    // Do not fail approval resolution if chat transcript write fails.
+  }
+}
 
 function isValidDecision(value: string): value is AgentApprovalDecision {
   return (
@@ -157,6 +184,17 @@ export async function POST(request: NextRequest) {
       createdAt: now,
     });
 
+    await appendAssistantMessageForThread({
+      uid: user.uid,
+      threadId,
+      text:
+        feedback && feedback.length > 0
+          ? `${summary} Feedback noted: ${feedback}`
+          : summary,
+      runId,
+      actionId,
+    });
+
     return NextResponse.json({
       ok: true,
       status: "rejected",
@@ -265,6 +303,14 @@ export async function POST(request: NextRequest) {
       createdAt: now,
     });
 
+    await appendAssistantMessageForThread({
+      uid: user.uid,
+      threadId,
+      text: summary,
+      runId,
+      actionId,
+    });
+
     return NextResponse.json({
       ok: true,
       status: "approved_executed",
@@ -309,8 +355,16 @@ export async function POST(request: NextRequest) {
         endedAt: now,
         updatedAt: now,
       },
-      { merge: true },
+        { merge: true },
     );
+
+    await appendAssistantMessageForThread({
+      uid: user.uid,
+      threadId,
+      text: message,
+      runId,
+      actionId,
+    });
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

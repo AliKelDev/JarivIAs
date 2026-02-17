@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./dashboard.module.css";
 
@@ -53,6 +53,7 @@ type AgentPendingApproval = {
   tool: string;
   reason: string;
   preview: string;
+  threadId?: string;
   runId?: string;
   actionId?: string;
 };
@@ -64,8 +65,33 @@ type AgentPendingApprovalsResponse = {
     tool: string;
     reason: string;
     preview: string;
+    threadId: string;
     runId: string;
     actionId: string;
+  }>;
+};
+
+type AgentThreadMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt?: string | null;
+  runId?: string | null;
+  actionId?: string | null;
+};
+
+type AgentThreadResponse = {
+  ok: boolean;
+  threadId: string;
+  messages: AgentThreadMessage[];
+  pendingApprovals: Array<{
+    id: string;
+    tool: string;
+    reason: string;
+    preview: string;
+    runId: string;
+    actionId: string;
+    createdAt?: string | null;
   }>;
 };
 
@@ -78,6 +104,19 @@ function isAgentPendingApprovalsResponse(
 
   const pending = (value as AgentPendingApprovalsResponse).pending;
   return Array.isArray(pending);
+}
+
+function isAgentThreadResponse(value: unknown): value is AgentThreadResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  if (!("messages" in value) || !("pendingApprovals" in value)) {
+    return false;
+  }
+
+  const typed = value as AgentThreadResponse;
+  return Array.isArray(typed.messages) && Array.isArray(typed.pendingApprovals);
 }
 
 function readErrorMessage(value: unknown, fallback: string): string {
@@ -113,6 +152,9 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [prompt, setPrompt] = useState(
     "Create a follow-up plan for this week and save the run.",
   );
+  const [agentThreadId, setAgentThreadId] = useState<string | null>(null);
+  const [agentMessages, setAgentMessages] = useState<AgentThreadMessage[]>([]);
+  const [agentThreadLoading, setAgentThreadLoading] = useState(false);
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
   const [runResult, setRunResult] = useState<RunResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -156,7 +198,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
     return searchParams.get("oauth_error");
   }, [searchParams]);
 
-  async function refreshGoogleStatus() {
+  const refreshGoogleStatus = useCallback(async () => {
     setIntegrationLoading(true);
     setIntegrationError(null);
 
@@ -187,9 +229,61 @@ export function DashboardClient({ user }: DashboardClientProps) {
     } finally {
       setIntegrationLoading(false);
     }
-  }
+  }, []);
 
-  async function refreshAgentPendingApproval() {
+  const refreshAgentThread = useCallback(async (threadId: string) => {
+    setAgentThreadLoading(true);
+    setAgentApprovalError(null);
+
+    try {
+      const response = await fetch(
+        `/api/agent/thread?threadId=${encodeURIComponent(threadId)}`,
+        {
+          cache: "no-store",
+        },
+      );
+      const body = (await response.json().catch(() => null)) as
+        | AgentThreadResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(readErrorMessage(body, "Failed to load thread."));
+      }
+
+      if (!isAgentThreadResponse(body)) {
+        throw new Error("Invalid thread response.");
+      }
+
+      setAgentThreadId(body.threadId);
+      setAgentMessages(body.messages);
+
+      const firstPending = body.pendingApprovals[0];
+      if (firstPending) {
+        setAgentPendingApproval({
+          id: firstPending.id,
+          tool: firstPending.tool,
+          reason: firstPending.reason,
+          preview: firstPending.preview,
+          threadId: body.threadId,
+          runId: firstPending.runId,
+          actionId: firstPending.actionId,
+        });
+      } else {
+        setAgentPendingApproval(null);
+      }
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to load agent thread.";
+      setAgentApprovalError(message);
+    } finally {
+      setAgentThreadLoading(false);
+    }
+  }, []);
+
+  const refreshAgentPendingApproval = useCallback(async () => {
     setAgentApprovalError(null);
     try {
       const response = await fetch("/api/agent/approvals/pending?limit=1", {
@@ -217,9 +311,15 @@ export function DashboardClient({ user }: DashboardClientProps) {
         tool: first.tool,
         reason: first.reason,
         preview: first.preview,
+        threadId: first.threadId,
         runId: first.runId,
         actionId: first.actionId,
       });
+
+      if (first.threadId) {
+        setAgentThreadId(first.threadId);
+        await refreshAgentThread(first.threadId);
+      }
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -227,12 +327,12 @@ export function DashboardClient({ user }: DashboardClientProps) {
           : "Failed to fetch pending agent approval.";
       setAgentApprovalError(message);
     }
-  }
+  }, [refreshAgentThread]);
 
   useEffect(() => {
     void refreshGoogleStatus();
     void refreshAgentPendingApproval();
-  }, []);
+  }, [refreshGoogleStatus, refreshAgentPendingApproval]);
 
   async function handleRunAgentStub() {
     setIsSubmittingRun(true);
@@ -245,7 +345,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
       const response = await fetch("/api/agent/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          threadId: agentThreadId ?? undefined,
+        }),
       });
 
       const body = (await response.json().catch(() => null)) as
@@ -261,6 +364,8 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
       const runResponse = body as RunResponse;
       setRunResult(runResponse);
+      setAgentThreadId(runResponse.threadId);
+      setPrompt("");
 
       if (
         runResponse.mode === "requires_approval" &&
@@ -272,12 +377,12 @@ export function DashboardClient({ user }: DashboardClientProps) {
           tool: runResponse.approval.tool,
           reason: runResponse.approval.reason,
           preview: runResponse.approval.preview,
+          threadId: runResponse.threadId,
           runId: runResponse.runId,
           actionId: runResponse.actionId,
         });
-      } else {
-        void refreshAgentPendingApproval();
       }
+      await refreshAgentThread(runResponse.threadId);
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -398,6 +503,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
     if (!agentPendingApproval) {
       return;
     }
+    const targetThreadId = agentPendingApproval.threadId ?? agentThreadId;
 
     setAgentApprovalSubmitting(true);
     setAgentApprovalError(null);
@@ -427,7 +533,11 @@ export function DashboardClient({ user }: DashboardClientProps) {
       setAgentApprovalResult(body as Record<string, unknown>);
       setAgentPendingApproval(null);
       setAgentApprovalFeedback("");
-      await refreshAgentPendingApproval();
+      if (targetThreadId) {
+        await refreshAgentThread(targetThreadId);
+      } else {
+        await refreshAgentPendingApproval();
+      }
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -475,6 +585,17 @@ export function DashboardClient({ user }: DashboardClientProps) {
     } finally {
       setCalendarSubmitting(false);
     }
+  }
+
+  function handleStartNewConversation() {
+    setAgentThreadId(null);
+    setAgentMessages([]);
+    setAgentPendingApproval(null);
+    setAgentApprovalFeedback("");
+    setAgentApprovalResult(null);
+    setRunResult(null);
+    setRunError(null);
+    setPrompt("");
   }
 
   async function handleSignOut() {
@@ -678,22 +799,68 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
         <section className={styles.panel}>
           <h2 className={styles.panelTitle}>Agent (Gemini Runtime)</h2>
+          <div className={styles.buttonRow}>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={handleStartNewConversation}
+            >
+              New conversation
+            </button>
+            {agentThreadId ? (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => void refreshAgentThread(agentThreadId)}
+              >
+                Refresh thread
+              </button>
+            ) : null}
+          </div>
+
+          <div className={styles.chatLog}>
+            {agentThreadLoading ? (
+              <p className={styles.meta}>Loading conversation...</p>
+            ) : null}
+            {agentMessages.length === 0 && !agentThreadLoading ? (
+              <p className={styles.meta}>
+                No messages yet. Ask the assistant to plan, email, or schedule something.
+              </p>
+            ) : null}
+            {agentMessages.map((message) => (
+              <article
+                key={message.id}
+                className={
+                  message.role === "user"
+                    ? styles.chatMessageUser
+                    : styles.chatMessageAssistant
+                }
+              >
+                <p className={styles.chatRole}>
+                  {message.role === "user" ? "You" : "Assistant"}
+                </p>
+                <p className={styles.chatText}>{message.text}</p>
+              </article>
+            ))}
+          </div>
+
           <label htmlFor="prompt" className={styles.label}>
-            Prompt
+            Your message
           </label>
           <textarea
             id="prompt"
-            className={styles.textarea}
+            className={styles.chatComposer}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
+            placeholder="Ask the assistant to draft an email, create an event, or plan work..."
           />
           <button
             type="button"
             className={styles.runButton}
             onClick={handleRunAgentStub}
-            disabled={isSubmittingRun}
+            disabled={isSubmittingRun || prompt.trim().length === 0}
           >
-            {isSubmittingRun ? "Running..." : "Run Agent"}
+            {isSubmittingRun ? "Sending..." : "Send"}
           </button>
 
           {agentPendingApproval ? (

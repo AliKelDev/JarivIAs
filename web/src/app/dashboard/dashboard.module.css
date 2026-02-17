@@ -84,6 +84,18 @@
   background: #fcfdff;
 }
 
+.chatComposer {
+  width: 100%;
+  min-height: 100px;
+  border-radius: 10px;
+  border: 1px solid #c7d1dc;
+  padding: 0.8rem;
+  font: inherit;
+  color: #18202a;
+  resize: vertical;
+  background: #fcfdff;
+}
+
 .input {
   width: 100%;
   border-radius: 10px;
@@ -95,7 +107,8 @@
 }
 
 .input::placeholder,
-.textarea::placeholder {
+.textarea::placeholder,
+.chatComposer::placeholder {
   color: #6b7d90;
 }
 
@@ -150,6 +163,46 @@
   background: #fff7f6;
   border-radius: 10px;
   padding: 0.9rem;
+}
+
+.chatLog {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid #d6dde6;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 0.85rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.chatMessageUser,
+.chatMessageAssistant {
+  border: 1px solid #d6dde6;
+  border-radius: 10px;
+  padding: 0.65rem 0.7rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.chatMessageUser {
+  background: #eaf3ff;
+  border-color: #bfd5f6;
+}
+
+.chatMessageAssistant {
+  background: #fff;
+}
+
+.chatRole {
+  font-size: 0.78rem;
+  color: #526171;
+  font-weight: 600;
+}
+
+.chatText {
+  color: #18202a;
+  white-space: pre-wrap;
 }
 
 .approvalTitle {
