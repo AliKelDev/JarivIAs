@@ -50,6 +50,22 @@ env:
     secret: GOOGLE_OAUTH_CLIENT_SECRET
     availability:
       - RUNTIME
+  - variable: GOOGLE_GENAI_USE_VERTEXAI
+    value: "true"
+    availability:
+      - RUNTIME
+  - variable: GOOGLE_CLOUD_PROJECT
+    value: jariv-agentic-portal-26-148
+    availability:
+      - RUNTIME
+  - variable: GOOGLE_CLOUD_LOCATION
+    value: us-central1
+    availability:
+      - RUNTIME
+  - variable: GEMINI_MODEL
+    value: gemini-2.5-flash
+    availability:
+      - RUNTIME
 
   # Grant access to secrets in Cloud Secret Manager.
   # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters

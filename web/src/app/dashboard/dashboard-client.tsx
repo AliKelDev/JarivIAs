@@ -520,9 +520,9 @@ export function DashboardClient({ user }: DashboardClientProps) {
         </section>
 
         <section className={styles.panel}>
-          <h2 className={styles.panelTitle}>Agent Stub</h2>
+          <h2 className={styles.panelTitle}>Agent (Gemini Runtime)</h2>
           <label htmlFor="prompt" className={styles.label}>
-            Prompt (persists run + action in Firestore)
+            Prompt
           </label>
           <textarea
             id="prompt"
@@ -536,7 +536,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
             onClick={handleRunAgentStub}
             disabled={isSubmittingRun}
           >
-            {isSubmittingRun ? "Running..." : "Run Agent Stub"}
+            {isSubmittingRun ? "Running..." : "Run Agent"}
           </button>
           {runError ? <p className={styles.error}>{runError}</p> : null}
           {runResult ? (

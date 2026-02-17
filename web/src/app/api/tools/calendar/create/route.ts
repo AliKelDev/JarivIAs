@@ -1,13 +1,10 @@
-import { FieldValue } from "firebase-admin/firestore";
-import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth/session";
 import { getRequestOrigin } from "@/lib/http/origin";
 import {
-  getGoogleOAuthClientForUser,
-  hasScope,
-} from "@/lib/google/integration";
-import { getFirebaseAdminDb } from "@/lib/firebase/admin";
+  createCalendarEventForUser,
+  isIsoDate,
+} from "@/lib/tools/calendar";
 
 export const runtime = "nodejs";
 
@@ -19,10 +16,6 @@ type CreateCalendarBody = {
   endIso?: string;
   timeZone?: string;
 };
-
-function isIsoDate(value: string): boolean {
-  return !Number.isNaN(Date.parse(value));
-}
 
 export async function POST(request: NextRequest) {
   const origin = getRequestOrigin(request);
@@ -56,44 +49,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    const createResult = await createCalendarEventForUser({
       uid: user.uid,
       origin,
-    });
-
-    if (!hasScope(integration, "https://www.googleapis.com/auth/calendar.events")) {
-      return NextResponse.json(
-        { error: "Missing required Calendar scope. Reconnect Google Workspace." },
-        { status: 403 },
-      );
-    }
-
-    const calendar = google.calendar({ version: "v3", auth: oauthClient });
-    const insertResponse = await calendar.events.insert({
-      calendarId: "primary",
-      requestBody: {
-        summary,
-        description: description || undefined,
-        location: location || undefined,
-        start: { dateTime: startIso, timeZone },
-        end: { dateTime: endIso, timeZone },
-      },
-    });
-
-    await getFirebaseAdminDb().collection("audit").add({
-      uid: user.uid,
-      type: "calendar_event_create",
-      status: "completed",
       summary,
-      eventId: insertResponse.data.id ?? null,
-      eventLink: insertResponse.data.htmlLink ?? null,
-      createdAt: FieldValue.serverTimestamp(),
+      description: description || undefined,
+      location: location || undefined,
+      startIso,
+      endIso,
+      timeZone,
+      auditType: "calendar_event_create",
+      auditMeta: {
+        source: "manual_direct_endpoint",
+      },
     });
 
     return NextResponse.json({
       ok: true,
-      eventId: insertResponse.data.id ?? null,
-      eventLink: insertResponse.data.htmlLink ?? null,
+      eventId: createResult.eventId,
+      eventLink: createResult.eventLink,
     });
   } catch (caughtError) {
     const message =
