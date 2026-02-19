@@ -116,7 +116,7 @@ export async function generateGeminiAgentPlan(params: {
 
   const generationConfig = {
     systemInstruction,
-    temperature: 0.2,
+    temperature: 1,
     tools: [{ functionDeclarations: toolDeclarations }],
     toolConfig: {
       functionCallingConfig: {

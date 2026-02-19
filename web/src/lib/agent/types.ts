@@ -72,6 +72,7 @@ export type AgentRunRequest = {
   threadId: string;
   origin: string;
   source: string;
+  conversation?: AgentConversationMessage[];
   onTextDelta?: (delta: string) => void | Promise<void>;
 };
 

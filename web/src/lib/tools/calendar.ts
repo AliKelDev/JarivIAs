@@ -8,6 +8,8 @@ import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 
 export const CALENDAR_EVENTS_SCOPE =
   "https://www.googleapis.com/auth/calendar.events";
+export const CALENDAR_READONLY_SCOPE =
+  "https://www.googleapis.com/auth/calendar.readonly";
 
 type CreateCalendarEventParams = {
   uid: string;
@@ -24,6 +26,34 @@ type CreateCalendarEventParams = {
 
 export function isIsoDate(value: string): boolean {
   return !Number.isNaN(Date.parse(value));
+}
+
+export type UpcomingCalendarEvent = {
+  id: string | null;
+  summary: string;
+  description: string | null;
+  startIso: string | null;
+  endIso: string | null;
+  htmlLink: string | null;
+  location: string | null;
+};
+
+type ListUpcomingCalendarEventsParams = {
+  uid: string;
+  origin: string;
+  maxResults?: number;
+  timeMinIso?: string;
+};
+
+function normalizeCalendarDate(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+  return new Date(parsed).toISOString();
 }
 
 export async function createCalendarEventForUser(
@@ -86,4 +116,47 @@ export async function createCalendarEventForUser(
   });
 
   return { eventId, eventLink };
+}
+
+export async function listUpcomingCalendarEventsForUser(
+  params: ListUpcomingCalendarEventsParams,
+): Promise<UpcomingCalendarEvent[]> {
+  const { uid, origin } = params;
+  const maxResults = Math.min(Math.max(params.maxResults ?? 8, 1), 20);
+  const timeMinIso = params.timeMinIso ?? new Date().toISOString();
+
+  if (!isIsoDate(timeMinIso)) {
+    throw new Error("timeMinIso must be a valid ISO datetime string.");
+  }
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, CALENDAR_READONLY_SCOPE)) {
+    throw new Error(
+      "Missing required Calendar read scope. Reconnect Google Workspace.",
+    );
+  }
+
+  const calendar = google.calendar({ version: "v3", auth: oauthClient });
+  const listResponse = await calendar.events.list({
+    calendarId: "primary",
+    singleEvents: true,
+    orderBy: "startTime",
+    showDeleted: false,
+    timeMin: timeMinIso,
+    maxResults,
+  });
+
+  return (listResponse.data.items ?? []).map((event) => ({
+    id: event.id ?? null,
+    summary: event.summary?.trim() || "(Untitled event)",
+    description: event.description?.trim() || null,
+    startIso: normalizeCalendarDate(event.start?.dateTime ?? event.start?.date),
+    endIso: normalizeCalendarDate(event.end?.dateTime ?? event.end?.date),
+    htmlLink: event.htmlLink ?? null,
+    location: event.location?.trim() || null,
+  }));
 }

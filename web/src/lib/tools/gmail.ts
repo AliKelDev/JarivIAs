@@ -7,6 +7,8 @@ import {
 } from "@/lib/google/integration";
 
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+export const GMAIL_READONLY_SCOPE =
+  "https://www.googleapis.com/auth/gmail.readonly";
 
 type SendGmailMessageParams = {
   uid: string;
@@ -18,12 +20,42 @@ type SendGmailMessageParams = {
   auditMeta?: Record<string, unknown>;
 };
 
+export type RecentGmailMessage = {
+  id: string;
+  threadId: string | null;
+  from: string;
+  subject: string;
+  snippet: string;
+  internalDateIso: string | null;
+};
+
+type ListRecentGmailMessagesParams = {
+  uid: string;
+  origin: string;
+  maxResults?: number;
+};
+
 function encodeBase64Url(value: string): string {
   return Buffer.from(value, "utf8")
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
+}
+
+function readGmailHeader(
+  headers: Array<{ name?: string | null; value?: string | null }> | null | undefined,
+  targetName: string,
+): string | null {
+  if (!headers?.length) {
+    return null;
+  }
+  const target = targetName.trim().toLowerCase();
+  const found = headers.find(
+    (header) => header.name?.trim().toLowerCase() === target,
+  );
+  const value = found?.value?.trim();
+  return value || null;
 }
 
 export function normalizeEmailAddress(value: string): string {
@@ -117,4 +149,62 @@ export async function sendGmailMessageForUser(params: SendGmailMessageParams) {
   });
 
   return { messageId, threadId };
+}
+
+export async function listRecentGmailMessagesForUser(
+  params: ListRecentGmailMessagesParams,
+): Promise<RecentGmailMessage[]> {
+  const { uid, origin } = params;
+  const maxResults = Math.min(Math.max(params.maxResults ?? 8, 1), 20);
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_READONLY_SCOPE)) {
+    throw new Error("Missing required Gmail read scope. Reconnect Google Workspace.");
+  }
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+  const listResponse = await gmail.users.messages.list({
+    userId: "me",
+    maxResults,
+    includeSpamTrash: false,
+    labelIds: ["INBOX"],
+  });
+
+  const messageRefs = listResponse.data.messages ?? [];
+  if (messageRefs.length === 0) {
+    return [];
+  }
+
+  const messages = await Promise.all(
+    messageRefs.map(async (messageRef) => {
+      if (!messageRef.id) {
+        return null;
+      }
+      const details = await gmail.users.messages.get({
+        userId: "me",
+        id: messageRef.id,
+        format: "metadata",
+        metadataHeaders: ["From", "Subject", "Date"],
+      });
+
+      const headers = details.data.payload?.headers;
+      const internalDateMs = Number(details.data.internalDate);
+      return {
+        id: details.data.id ?? messageRef.id,
+        threadId: details.data.threadId ?? null,
+        from: readGmailHeader(headers, "From") ?? "(Unknown sender)",
+        subject: readGmailHeader(headers, "Subject") ?? "(No subject)",
+        snippet: details.data.snippet?.trim() || "",
+        internalDateIso: Number.isFinite(internalDateMs)
+          ? new Date(internalDateMs).toISOString()
+          : null,
+      } satisfies RecentGmailMessage;
+    }),
+  );
+
+  return messages.filter((message): message is RecentGmailMessage => Boolean(message));
 }

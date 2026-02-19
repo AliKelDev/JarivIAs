@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { sanitizeConversationInput } from "@/lib/agent/conversation";
 import { getGeminiModelName, generateGeminiAgentPlan } from "@/lib/agent/gemini-client";
 import { evaluateAgentToolPolicy } from "@/lib/agent/policy";
 import { getAgentToolSet } from "@/lib/agent/tool-registry";
@@ -8,6 +9,7 @@ import {
   listThreadConversationForModel,
 } from "@/lib/agent/thread";
 import type {
+  AgentConversationMessage,
   AgentRunRequest,
   AgentRunResponse,
   AgentToolArgs,
@@ -16,12 +18,19 @@ import type {
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 
 const AGENT_SYSTEM_INSTRUCTION = `
-You are Jariv's execution assistant inside an authenticated portal.
-Rules:
+You are Alik, a capable and upbeat AI teammate inside an authenticated portal.
+Your mission is to help humans get meaningful work done.
+Style:
+- Be natural, warm, and proactive.
+- Keep responses concise but not robotic.
+- Ask clear follow-up questions only when required details are missing.
+Execution:
 - If a user asks for an action that maps to an available tool, call the tool.
-- If the user asks for general guidance, answer in plain text.
-- Never invent tool names or arguments.
-- Keep responses concise and operational.
+- If no tool is needed, answer directly in plain text.
+- Never invent tool names or argument fields.
+Reliability:
+- Respect approval and policy gates enforced by the backend.
+- Do not claim an action was completed unless the tool result confirms it.
 `.trim();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,6 +42,33 @@ function readFunctionCallArgs(value: unknown): AgentToolArgs {
     return {};
   }
   return value;
+}
+
+function buildPlanningConversation(params: {
+  prompt: string;
+  history: AgentConversationMessage[];
+  limit?: number;
+}): AgentConversationMessage[] {
+  const { prompt, history } = params;
+  const limit = Math.min(Math.max(params.limit ?? 30, 1), 120);
+  const trimmedPrompt = prompt.trim();
+
+  let conversation = history
+    .map((message) => ({
+      role: message.role,
+      text: message.text.trim(),
+    }))
+    .filter((message) => message.text.length > 0)
+    .slice(-limit);
+
+  if (trimmedPrompt.length > 0) {
+    const last = conversation[conversation.length - 1];
+    if (!last || last.role !== "user" || last.text !== trimmedPrompt) {
+      conversation = [...conversation, { role: "user", text: trimmedPrompt }];
+    }
+  }
+
+  return conversation.slice(-limit);
 }
 
 async function markRunFailed(params: {
@@ -178,6 +214,8 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
   const modelName = getGeminiModelName();
 
   try {
+    const providedConversation = sanitizeConversationInput(request.conversation, 30);
+
     await ensureThreadForUser({
       uid: request.uid,
       threadId: request.threadId,
@@ -198,12 +236,14 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
       })
       .catch(() => undefined);
 
-    const previousConversationPromise = listThreadConversationForModel({
-      uid: request.uid,
-      threadId: request.threadId,
-      limit: 30,
-      skipThreadCheck: true,
-    });
+    const previousConversationPromise = providedConversation
+      ? Promise.resolve<AgentConversationMessage[]>([])
+      : listThreadConversationForModel({
+          uid: request.uid,
+          threadId: request.threadId,
+          limit: 30,
+          skipThreadCheck: true,
+        });
 
     const persistUserMessagePromise = appendThreadMessage({
       uid: request.uid,
@@ -216,13 +256,11 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
     }).catch(() => undefined);
 
     const previousConversation = await previousConversationPromise;
-    const conversation = [
-      ...previousConversation,
-      {
-        role: "user" as const,
-        text: request.prompt,
-      },
-    ];
+    const conversation = buildPlanningConversation({
+      prompt: request.prompt,
+      history: providedConversation ?? previousConversation,
+      limit: 30,
+    });
 
     const plan = await generateGeminiAgentPlan({
       conversation,
