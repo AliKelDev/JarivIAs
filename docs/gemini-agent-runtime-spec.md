@@ -192,3 +192,7 @@ Write immutable audit entries to `audit` for all side effects.
 
 - Gemini function calling: https://ai.google.dev/gemini-api/docs/function-calling
 - `@google/genai` SDK: https://github.com/googleapis/js-genai
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

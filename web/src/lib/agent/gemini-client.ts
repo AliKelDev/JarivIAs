@@ -88,6 +88,23 @@ export function getGeminiModelName(): string {
   return readModelName();
 }
 
+export async function generateGeminiText(params: {
+  prompt: string;
+  systemInstruction?: string;
+}): Promise<string> {
+  const client = getGeminiClient();
+  const model = readModelName();
+  const response = await client.models.generateContent({
+    model,
+    contents: [createUserContent(params.prompt)],
+    config: {
+      systemInstruction: params.systemInstruction,
+      temperature: 0.2,
+    },
+  });
+  return response.text ?? "";
+}
+
 export async function generateGeminiAgentPlan(params: {
   conversation: AgentConversationMessage[];
   toolDeclarations: FunctionDeclaration[];

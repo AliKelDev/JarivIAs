@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth/session";
-import { sanitizeConversationInput } from "@/lib/agent/conversation";
+import {
+  sanitizeAttachedContextInput,
+  sanitizeConversationInput,
+} from "@/lib/agent/conversation";
 import { runAgent } from "@/lib/agent/orchestrator";
 import { getRequestOrigin } from "@/lib/http/origin";
 
@@ -11,6 +14,7 @@ type AgentRunRequestBody = {
   prompt?: string;
   threadId?: string;
   conversation?: unknown;
+  attachedContext?: unknown;
 };
 
 export async function POST(request: NextRequest) {
@@ -26,6 +30,7 @@ export async function POST(request: NextRequest) {
   const prompt = body?.prompt?.trim();
   const threadId = body?.threadId?.trim() || randomUUID();
   const conversation = sanitizeConversationInput(body?.conversation, 40);
+  const attachedContext = sanitizeAttachedContextInput(body?.attachedContext, 12);
 
   if (!prompt) {
     return NextResponse.json(
@@ -42,6 +47,7 @@ export async function POST(request: NextRequest) {
     origin,
     source: "dashboard",
     conversation,
+    attachedContext,
   });
 
   return NextResponse.json(result);

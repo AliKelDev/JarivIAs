@@ -132,3 +132,7 @@ firebase deploy --only apphosting --project jariv-agentic-portal-26-148
   https://firebase.google.com/docs/app-hosting/configure#configure_an_app_hosting_backend_s_service_account
 - Gemini skills repo:
   https://github.com/google-gemini/gemini-skills
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

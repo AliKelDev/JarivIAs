@@ -306,3 +306,7 @@ Each tool adapter should include:
 5. Add Gmail flow.
 6. Add queue/retry/idempotency.
 7. Prepare OAuth verification artifacts.
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

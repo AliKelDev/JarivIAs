@@ -1,12 +1,16 @@
 import {
   createCalendarEventForUser,
   isIsoDate,
+  updateCalendarEventForUser,
 } from "@/lib/tools/calendar";
 import {
+  createGmailDraftForUser,
   isValidEmailAddress,
+  readGmailThreadForUser,
   normalizeEmailAddress,
   sendGmailMessageForUser,
 } from "@/lib/tools/gmail";
+import { addMemoryEntry } from "@/lib/memory";
 import type {
   AgentToolArgs,
   AgentToolDefinition,
@@ -75,6 +79,161 @@ const calendarCreateParametersJsonSchema: Record<string, unknown> = {
     },
   },
   required: ["summary", "startIso", "endIso"],
+};
+
+const gmailDraftCreateParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    to: {
+      type: "string",
+      description: "Recipient email address.",
+    },
+    subject: {
+      type: "string",
+      description: "Email subject line.",
+    },
+    bodyText: {
+      type: "string",
+      description: "Plain text body for the draft email.",
+    },
+  },
+  required: ["to", "subject", "bodyText"],
+};
+
+const gmailThreadReadParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    threadId: {
+      type: "string",
+      description: "Gmail thread ID to read.",
+    },
+    maxMessages: {
+      type: "integer",
+      description: "Maximum messages to return from the thread (1-10).",
+    },
+  },
+  required: ["threadId"],
+};
+
+const gmailDraftCreateTool: AgentToolDefinition = {
+  name: "gmail_draft_create",
+  description:
+    "Create a draft email in the user's Gmail inbox without sending it. " +
+    "Use this when the user wants a message composed for review, when intent to send is unclear, " +
+    "or when acting proactively without explicit send instruction.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: gmailDraftCreateParametersJsonSchema,
+  declaration: {
+    name: "gmail_draft_create",
+    description:
+      "Create a draft email in Gmail. The draft is saved to the user's inbox but not sent. " +
+      "Prefer this over gmail_send when the user hasn't explicitly asked to send.",
+    parametersJsonSchema: gmailDraftCreateParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const toResult = readRequiredStringArg(args, "to");
+    if (!toResult.ok) return toResult;
+    const subjectResult = readRequiredStringArg(args, "subject");
+    if (!subjectResult.ok) return subjectResult;
+    const bodyResult = readRequiredStringArg(args, "bodyText");
+    if (!bodyResult.ok) return bodyResult;
+
+    const to = normalizeEmailAddress(toResult.value);
+    if (!isValidEmailAddress(to)) {
+      return { ok: false, error: "to must be a valid email address." };
+    }
+
+    return {
+      ok: true,
+      value: { to, subject: subjectResult.value, bodyText: bodyResult.value },
+    };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const to = typeof args.to === "string" ? args.to : "(missing)";
+    const subject = typeof args.subject === "string" ? args.subject : "(missing)";
+    return `Create draft to ${to} with subject "${subject}".`;
+  },
+  async execute(ctx, args) {
+    const result = await createGmailDraftForUser({
+      uid: ctx.uid,
+      origin: ctx.origin,
+      to: args.to as string,
+      subject: args.subject as string,
+      bodyText: args.bodyText as string,
+    });
+    return {
+      draftId: result.draftId,
+      gmailLink: result.gmailLink,
+      to: args.to,
+      subject: args.subject,
+    };
+  },
+};
+
+const gmailThreadReadTool: AgentToolDefinition = {
+  name: "gmail_thread_read",
+  description:
+    "Read a Gmail thread with full message content for context and follow-up drafting.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: gmailThreadReadParametersJsonSchema,
+  declaration: {
+    name: "gmail_thread_read",
+    description:
+      "Read a Gmail thread by thread ID and return up to 10 recent messages with body text.",
+    parametersJsonSchema: gmailThreadReadParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const threadIdResult = readRequiredStringArg(args, "threadId");
+    if (!threadIdResult.ok) {
+      return threadIdResult;
+    }
+
+    let maxMessages = 5;
+    const rawMax = args.maxMessages;
+    if (rawMax !== undefined) {
+      if (
+        typeof rawMax !== "number" ||
+        !Number.isFinite(rawMax) ||
+        !Number.isInteger(rawMax)
+      ) {
+        return { ok: false, error: "maxMessages must be an integer between 1 and 10." };
+      }
+      maxMessages = Math.min(Math.max(rawMax, 1), 10);
+    }
+
+    return {
+      ok: true,
+      value: {
+        threadId: threadIdResult.value,
+        maxMessages,
+      },
+    };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const threadId = typeof args.threadId === "string" ? args.threadId : "(missing)";
+    const maxMessages =
+      typeof args.maxMessages === "number" ? args.maxMessages : 5;
+    return `Read Gmail thread ${threadId} (up to ${maxMessages} messages).`;
+  },
+  async execute(ctx, args) {
+    const result = await readGmailThreadForUser({
+      uid: ctx.uid,
+      origin: ctx.origin,
+      threadId: args.threadId as string,
+      maxMessages:
+        typeof args.maxMessages === "number" ? args.maxMessages : undefined,
+    });
+
+    return {
+      threadId: result.threadId,
+      historyId: result.historyId,
+      messages: result.messages,
+    };
+  },
 };
 
 const gmailSendTool: AgentToolDefinition = {
@@ -237,7 +396,172 @@ const calendarCreateTool: AgentToolDefinition = {
   },
 };
 
-const agentTools: AgentToolDefinition[] = [gmailSendTool, calendarCreateTool];
+const calendarUpdateParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    eventId: {
+      type: "string",
+      description: "The Google Calendar event ID to update.",
+    },
+    summary: {
+      type: "string",
+      description: "New event title (optional).",
+    },
+    description: {
+      type: "string",
+      description: "New event description (optional).",
+    },
+    location: {
+      type: "string",
+      description: "New event location (optional).",
+    },
+    startIso: {
+      type: "string",
+      description: "New start time in ISO-8601 format (optional).",
+    },
+    endIso: {
+      type: "string",
+      description: "New end time in ISO-8601 format (optional).",
+    },
+    timeZone: {
+      type: "string",
+      description: "IANA time zone name, e.g. America/New_York (optional).",
+    },
+  },
+  required: ["eventId"],
+};
+
+const calendarUpdateTool: AgentToolDefinition = {
+  name: "calendar_event_update",
+  description:
+    "Update an existing Google Calendar event. Use this to reschedule, rename, or change details of an event the user already has.",
+  sideEffect: true,
+  defaultApproval: "required",
+  parametersJsonSchema: calendarUpdateParametersJsonSchema,
+  declaration: {
+    name: "calendar_event_update",
+    description:
+      "Update fields of an existing Google Calendar event by event ID. Only provided fields are changed.",
+    parametersJsonSchema: calendarUpdateParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const eventIdResult = readRequiredStringArg(args, "eventId");
+    if (!eventIdResult.ok) return eventIdResult;
+
+    if (typeof args.startIso === "string" && !isIsoDate(args.startIso)) {
+      return { ok: false, error: "startIso must be a valid ISO datetime string." };
+    }
+    if (typeof args.endIso === "string" && !isIsoDate(args.endIso)) {
+      return { ok: false, error: "endIso must be a valid ISO datetime string." };
+    }
+
+    return {
+      ok: true,
+      value: {
+        eventId: eventIdResult.value,
+        summary: typeof args.summary === "string" ? args.summary.trim() : undefined,
+        description: typeof args.description === "string" ? args.description.trim() : undefined,
+        location: typeof args.location === "string" ? args.location.trim() : undefined,
+        startIso: typeof args.startIso === "string" ? args.startIso : undefined,
+        endIso: typeof args.endIso === "string" ? args.endIso : undefined,
+        timeZone: typeof args.timeZone === "string" && args.timeZone.trim() ? args.timeZone.trim() : "UTC",
+      },
+    };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const eventId = typeof args.eventId === "string" ? args.eventId : "(missing)";
+    const changes: string[] = [];
+    if (args.summary) changes.push(`title → "${args.summary}"`);
+    if (args.startIso) changes.push(`start → ${args.startIso}`);
+    if (args.endIso) changes.push(`end → ${args.endIso}`);
+    if (args.location) changes.push(`location → "${args.location}"`);
+    return `Update event ${eventId}${changes.length ? `: ${changes.join(", ")}` : "."}`;
+  },
+  async execute(ctx, args) {
+    const result = await updateCalendarEventForUser({
+      uid: ctx.uid,
+      origin: ctx.origin,
+      eventId: args.eventId as string,
+      summary: args.summary as string | undefined,
+      description: args.description as string | undefined,
+      location: args.location as string | undefined,
+      startIso: args.startIso as string | undefined,
+      endIso: args.endIso as string | undefined,
+      timeZone: args.timeZone as string | undefined,
+      auditType: "calendar_event_update_agent",
+      auditMeta: { source: "agent_runtime", runId: ctx.runId, actionId: ctx.actionId },
+    });
+    return { eventId: result.eventId, eventLink: result.eventLink };
+  },
+};
+
+const saveMemoryParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    content: {
+      type: "string",
+      description: "The fact, preference, or constraint to remember about the user.",
+    },
+    confidence: {
+      type: "string",
+      enum: ["high", "medium"],
+      description: "How confident you are this is accurate. Use 'high' only when explicitly stated by the user.",
+    },
+  },
+  required: ["content"],
+};
+
+const saveMemoryTool: AgentToolDefinition = {
+  name: "save_memory",
+  description:
+    "Persist something useful about the user for future sessions — preferences, constraints, working style, important contacts, or decisions they've made. " +
+    "Only save things that are not already obvious from their profile and that will genuinely help you serve them better later.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: saveMemoryParametersJsonSchema,
+  declaration: {
+    name: "save_memory",
+    description:
+      "Save a fact or preference about the user to long-term memory. " +
+      "Use this when you learn something that should persist across future conversations.",
+    parametersJsonSchema: saveMemoryParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const contentResult = readRequiredStringArg(args, "content");
+    if (!contentResult.ok) return contentResult;
+    if (contentResult.value.length > 500) {
+      return { ok: false, error: "content must be 500 characters or fewer." };
+    }
+    const confidence =
+      args.confidence === "high" || args.confidence === "medium"
+        ? args.confidence
+        : "medium";
+    return { ok: true, value: { content: contentResult.value, confidence } };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    return `Remember: "${typeof args.content === "string" ? args.content : ""}"`;
+  },
+  async execute(ctx, args) {
+    await addMemoryEntry(ctx.uid, {
+      source: "conversation",
+      threadId: ctx.threadId,
+      content: args.content as string,
+      confidence: args.confidence === "high" ? "high" : "medium",
+    });
+    return { saved: true, content: args.content };
+  },
+};
+
+const agentTools: AgentToolDefinition[] = [
+  saveMemoryTool,
+  gmailDraftCreateTool,
+  gmailThreadReadTool,
+  gmailSendTool,
+  calendarCreateTool,
+  calendarUpdateTool,
+];
 
 export function getAgentToolSet(): AgentToolSet {
   const byName = new Map<string, AgentToolDefinition>();

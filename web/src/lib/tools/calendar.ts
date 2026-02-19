@@ -118,6 +118,76 @@ export async function createCalendarEventForUser(
   return { eventId, eventLink };
 }
 
+type UpdateCalendarEventParams = {
+  uid: string;
+  origin: string;
+  eventId: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  startIso?: string;
+  endIso?: string;
+  timeZone?: string;
+  auditType?: string;
+  auditMeta?: Record<string, unknown>;
+};
+
+export async function updateCalendarEventForUser(
+  params: UpdateCalendarEventParams,
+) {
+  const { uid, origin, eventId, summary, description, location, startIso, endIso, timeZone, auditType, auditMeta } = params;
+
+  if (!eventId) {
+    throw new Error("eventId is required.");
+  }
+
+  if (startIso && !isIsoDate(startIso)) {
+    throw new Error("startIso must be a valid ISO datetime string.");
+  }
+  if (endIso && !isIsoDate(endIso)) {
+    throw new Error("endIso must be a valid ISO datetime string.");
+  }
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({ uid, origin });
+
+  if (!hasScope(integration, CALENDAR_EVENTS_SCOPE)) {
+    throw new Error("Missing required Calendar scope. Reconnect Google Workspace.");
+  }
+
+  const requestBody: Record<string, unknown> = {};
+  if (summary !== undefined) requestBody.summary = summary;
+  if (description !== undefined) requestBody.description = description;
+  if (location !== undefined) requestBody.location = location;
+  if (startIso !== undefined) {
+    requestBody.start = { dateTime: startIso, timeZone: timeZone ?? "UTC" };
+  }
+  if (endIso !== undefined) {
+    requestBody.end = { dateTime: endIso, timeZone: timeZone ?? "UTC" };
+  }
+
+  const calendar = google.calendar({ version: "v3", auth: oauthClient });
+  const patchResponse = await calendar.events.patch({
+    calendarId: "primary",
+    eventId,
+    requestBody,
+  });
+
+  const updatedLink = patchResponse.data.htmlLink ?? null;
+
+  await getFirebaseAdminDb().collection("audit").add({
+    uid,
+    type: auditType ?? "calendar_event_update",
+    status: "completed",
+    eventId,
+    summary: summary ?? null,
+    eventLink: updatedLink,
+    createdAt: FieldValue.serverTimestamp(),
+    ...(auditMeta ?? {}),
+  });
+
+  return { eventId, eventLink: updatedLink };
+}
+
 export async function listUpcomingCalendarEventsForUser(
   params: ListUpcomingCalendarEventsParams,
 ): Promise<UpcomingCalendarEvent[]> {

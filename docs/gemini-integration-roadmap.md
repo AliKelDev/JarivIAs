@@ -148,3 +148,7 @@ Exit criteria:
 - Google Gen AI JS SDK (`@google/genai`) examples: https://github.com/googleapis/js-genai
 - Firebase App Hosting service account guidance: https://firebase.google.com/docs/app-hosting/configure#configure_an_app_hosting_backend_s_service_account
 - Gemini skills reference repo (inspiration): https://github.com/google-gemini/gemini-skills
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

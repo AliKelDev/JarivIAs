@@ -24,6 +24,16 @@ export type AgentApprovalDecision =
 export type AgentToolArgs = Record<string, unknown>;
 export type AgentToolResult = Record<string, unknown>;
 
+export type AgentAttachedContextType = "email" | "calendar_event";
+
+export type AgentAttachedContextItem = {
+  type: AgentAttachedContextType;
+  id: string;
+  title?: string;
+  snippet?: string;
+  meta?: Record<string, unknown>;
+};
+
 export type AgentToolContext = {
   uid: string;
   userEmail: string | null;
@@ -73,6 +83,7 @@ export type AgentRunRequest = {
   origin: string;
   source: string;
   conversation?: AgentConversationMessage[];
+  attachedContext?: AgentAttachedContextItem[];
   onTextDelta?: (delta: string) => void | Promise<void>;
 };
 

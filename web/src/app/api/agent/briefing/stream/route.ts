@@ -1,21 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserFromRequest } from "@/lib/auth/session";
-import {
-  sanitizeAttachedContextInput,
-  sanitizeConversationInput,
-} from "@/lib/agent/conversation";
 import { runAgent } from "@/lib/agent/orchestrator";
+import { listUpcomingCalendarEventsForUser } from "@/lib/tools/calendar";
+import { listRecentGmailMessagesForUser } from "@/lib/tools/gmail";
 import { getRequestOrigin } from "@/lib/http/origin";
+import type { AgentAttachedContextItem } from "@/lib/agent/types";
 
 export const runtime = "nodejs";
 
-type AgentRunRequestBody = {
-  prompt?: string;
-  threadId?: string;
-  conversation?: unknown;
-  attachedContext?: unknown;
-};
+const BRIEFING_PROMPT =
+  "Give me my morning briefing. What's on my calendar today and tomorrow? " +
+  "Any important emails I should know about? " +
+  "Suggest 1–2 clear priorities for today. Keep it warm and concise.";
 
 type StreamEvent =
   | { type: "status"; status: string; threadId: string }
@@ -35,18 +32,43 @@ export async function POST(request: NextRequest) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | AgentRunRequestBody
+    | { threadId?: string }
     | null;
-  const prompt = body?.prompt?.trim();
   const threadId = body?.threadId?.trim() || randomUUID();
-  const conversation = sanitizeConversationInput(body?.conversation, 40);
-  const attachedContext = sanitizeAttachedContextInput(body?.attachedContext, 12);
 
-  if (!prompt) {
-    return NextResponse.json(
-      { error: "Prompt is required." },
-      { status: 400 },
-    );
+  const [eventsResult, messagesResult] = await Promise.allSettled([
+    listUpcomingCalendarEventsForUser({ uid: user.uid, origin, maxResults: 8 }),
+    listRecentGmailMessagesForUser({ uid: user.uid, origin, maxResults: 8 }),
+  ]);
+
+  const attachedContext: AgentAttachedContextItem[] = [];
+
+  if (eventsResult.status === "fulfilled") {
+    for (const event of eventsResult.value.slice(0, 8)) {
+      attachedContext.push({
+        type: "calendar_event",
+        id: event.id ?? `event-${event.startIso ?? "unknown"}`,
+        title: event.summary,
+        snippet: event.description ?? undefined,
+        meta: {
+          startIso: event.startIso,
+          endIso: event.endIso,
+          location: event.location,
+        },
+      });
+    }
+  }
+
+  if (messagesResult.status === "fulfilled") {
+    for (const msg of messagesResult.value.slice(0, 8)) {
+      attachedContext.push({
+        type: "email",
+        id: msg.id,
+        title: msg.subject,
+        snippet: msg.snippet,
+        meta: { from: msg.from, internalDateIso: msg.internalDateIso },
+      });
+    }
   }
 
   const encoder = new TextEncoder();
@@ -57,21 +79,16 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        push({
-          type: "status",
-          status: "planning",
-          threadId,
-        });
+        push({ type: "status", status: "planning", threadId });
 
         const result = await runAgent({
           uid: user.uid,
           userEmail: user.email ?? null,
-          prompt,
+          prompt: BRIEFING_PROMPT,
           threadId,
           origin,
-          source: "dashboard_stream",
-          conversation,
-          attachedContext,
+          source: "briefing",
+          attachedContext: attachedContext.length > 0 ? attachedContext : undefined,
           onTextDelta: async (delta) => {
             if (!delta || delta.length === 0) {
               return;
@@ -86,7 +103,7 @@ export async function POST(request: NextRequest) {
         });
       } catch (caughtError) {
         const message =
-          caughtError instanceof Error ? caughtError.message : "Agent run failed.";
+          caughtError instanceof Error ? caughtError.message : "Briefing run failed.";
         push({ type: "error", error: message });
       } finally {
         controller.close();

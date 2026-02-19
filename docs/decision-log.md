@@ -67,3 +67,7 @@ Revisit if:
 
 1. A task-centric UI outperforms chat for the dominant user workflows.
 2. Production telemetry shows streaming overhead or complexity outweighs UX gains.
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

@@ -37,7 +37,7 @@ export function LoginClient() {
       }
 
       await signOut(auth);
-      router.replace("/dashboard");
+      router.replace("/");
       router.refresh();
     } catch (caughtError) {
       const message =

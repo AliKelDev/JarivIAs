@@ -35,3 +35,7 @@ This folder captures the long-term plan for building and operating the AI assist
 2. Execute work from `docs/execution-playbook.md` phase by phase.
 3. Update checkboxes and notes after each completed task.
 4. Revisit risks and scope before adding new connectors or automation.
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

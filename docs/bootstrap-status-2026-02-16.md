@@ -127,3 +127,7 @@ gcloud auth application-default login
 3. Add structured latency instrumentation per stage (thread read, model call, tool exec).
 4. Add token-at-rest encryption for stored OAuth credentials.
 5. Add integration and regression tests for stream + approval resume flow.
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

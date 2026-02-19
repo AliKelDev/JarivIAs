@@ -212,3 +212,29 @@ Use this section to keep a running record.
   - Keep long-context thread history strategy (no aggressive short-window truncation).
 - Next:
   - Add Activity page and deeper observability (latency + token/cost metrics).
+
+## 2026-02-19
+
+- Completed:
+  - Added trust-level policy engine for agent side effects (`supervised` / `delegated` / `autonomous`).
+  - Added trust-level storage + read helpers in `users/{uid}/settings/agent_policy`.
+  - Added authenticated trust-level API (`GET/POST /api/agent/trust-level`).
+  - Added dashboard autonomy controls and active trust-level status display.
+  - Updated agent coordination board (`docs/AGENTS.md`) with implementation handoff details.
+  - Implemented bounded multi-step agent planning loop in orchestrator (`AGENT_MAX_LOOP_STEPS`, default 3).
+  - Preserved run-scoped memory/system instruction across loop iterations and fed tool results back into planner context.
+  - Verified loop changes with lint + production build.
+  - Added Firestore composite index for activity queries (`runs`: `uid ASC`, `createdAt DESC`).
+  - Added backend `attachedContext` pipeline for agent runs (request schema, sanitization, run/stream route wiring, orchestrator system-instruction injection).
+  - Added `gmail_thread_read` read-only tool (full thread read via Gmail Threads API) with registry wiring and validation.
+- Blockers:
+  - Concurrent unstaged edits detected in overlapping runtime files from parallel workstream; holding commit until merge context is confirmed.
+- Decisions:
+  - Keep trust level in a dedicated user settings doc for now, with profile fallback support for compatibility.
+- Next:
+  - Merge/commit trust-level + loop changes after reconciling concurrent file edits.
+  - Move to `calendar_event_update`, then `activity view`.
+
+---
+Signed by: Codex (GPT-5)
+Date: 2026-02-19

@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { google } from "googleapis";
+import type { gmail_v1 } from "googleapis";
 import { getFirebaseAdminDb } from "@/lib/firebase/admin";
 import {
   getGoogleOAuthClientForUser,
@@ -9,6 +10,8 @@ import {
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 export const GMAIL_READONLY_SCOPE =
   "https://www.googleapis.com/auth/gmail.readonly";
+export const GMAIL_COMPOSE_SCOPE =
+  "https://www.googleapis.com/auth/gmail.compose";
 
 type SendGmailMessageParams = {
   uid: string;
@@ -29,10 +32,34 @@ export type RecentGmailMessage = {
   internalDateIso: string | null;
 };
 
+export type GmailThreadReadMessage = {
+  id: string;
+  threadId: string | null;
+  from: string;
+  to: string | null;
+  subject: string;
+  snippet: string;
+  internalDateIso: string | null;
+  bodyText: string | null;
+};
+
+export type GmailThreadReadResult = {
+  threadId: string;
+  historyId: string | null;
+  messages: GmailThreadReadMessage[];
+};
+
 type ListRecentGmailMessagesParams = {
   uid: string;
   origin: string;
   maxResults?: number;
+};
+
+type ReadGmailThreadParams = {
+  uid: string;
+  origin: string;
+  threadId: string;
+  maxMessages?: number;
 };
 
 function encodeBase64Url(value: string): string {
@@ -56,6 +83,58 @@ function readGmailHeader(
   );
   const value = found?.value?.trim();
   return value || null;
+}
+
+function decodeBase64Url(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = (4 - (normalized.length % 4)) % 4;
+  const padded = `${normalized}${"=".repeat(padding)}`;
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function normalizeTextContent(value: string): string {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+function extractMessageBodyText(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  const mimeType = payload.mimeType?.toLowerCase() ?? "";
+  const bodyData = payload.body?.data;
+  if (mimeType === "text/plain" && bodyData) {
+    try {
+      return normalizeTextContent(decodeBase64Url(bodyData));
+    } catch {
+      return null;
+    }
+  }
+
+  if (payload.parts?.length) {
+    for (const part of payload.parts) {
+      const extracted = extractMessageBodyText(part);
+      if (extracted) {
+        return extracted;
+      }
+    }
+  }
+
+  if (bodyData) {
+    try {
+      return normalizeTextContent(decodeBase64Url(bodyData));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export function normalizeEmailAddress(value: string): string {
@@ -207,4 +286,103 @@ export async function listRecentGmailMessagesForUser(
   );
 
   return messages.filter((message): message is RecentGmailMessage => Boolean(message));
+}
+
+export async function readGmailThreadForUser(
+  params: ReadGmailThreadParams,
+): Promise<GmailThreadReadResult> {
+  const { uid, origin, threadId } = params;
+  const normalizedThreadId = threadId.trim();
+  if (!normalizedThreadId) {
+    throw new Error("threadId is required.");
+  }
+  const maxMessages = Math.min(Math.max(params.maxMessages ?? 5, 1), 10);
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_READONLY_SCOPE)) {
+    throw new Error("Missing required Gmail read scope. Reconnect Google Workspace.");
+  }
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+  const threadResponse = await gmail.users.threads.get({
+    userId: "me",
+    id: normalizedThreadId,
+    format: "full",
+  });
+
+  const threadMessages = (threadResponse.data.messages ?? []).slice(0, maxMessages);
+  const messages = threadMessages.map((message) => {
+    const headers = message.payload?.headers;
+    const internalDateMs = Number(message.internalDate);
+    const bodyText = extractMessageBodyText(message.payload);
+
+    return {
+      id: message.id ?? "",
+      threadId: message.threadId ?? null,
+      from: readGmailHeader(headers, "From") ?? "(Unknown sender)",
+      to: readGmailHeader(headers, "To"),
+      subject: readGmailHeader(headers, "Subject") ?? "(No subject)",
+      snippet: message.snippet?.trim() || "",
+      internalDateIso: Number.isFinite(internalDateMs)
+        ? new Date(internalDateMs).toISOString()
+        : null,
+      bodyText,
+    } satisfies GmailThreadReadMessage;
+  });
+
+  return {
+    threadId: threadResponse.data.id ?? normalizedThreadId,
+    historyId: threadResponse.data.historyId ?? null,
+    messages,
+  };
+}
+
+type CreateGmailDraftParams = {
+  uid: string;
+  origin: string;
+  to: string;
+  subject: string;
+  bodyText: string;
+};
+
+export async function createGmailDraftForUser(
+  params: CreateGmailDraftParams,
+): Promise<{ draftId: string; gmailLink: string }> {
+  const { uid, origin, to, subject, bodyText } = params;
+  const normalizedTo = normalizeEmailAddress(to);
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_COMPOSE_SCOPE)) {
+    throw new Error("Missing required Gmail compose scope. Reconnect Google Workspace.");
+  }
+
+  const rawMessage = [
+    `To: ${normalizedTo}`,
+    `Subject: ${subject}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    bodyText,
+  ].join("\r\n");
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+  const response = await gmail.users.drafts.create({
+    userId: "me",
+    requestBody: {
+      message: { raw: encodeBase64Url(rawMessage) },
+    },
+  });
+
+  const draftId = response.data.id ?? "";
+  return {
+    draftId,
+    gmailLink: `https://mail.google.com/mail/#drafts/${draftId}`,
+  };
 }
