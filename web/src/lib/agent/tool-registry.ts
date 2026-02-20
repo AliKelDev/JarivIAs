@@ -10,7 +10,7 @@ import {
   normalizeEmailAddress,
   sendGmailMessageForUser,
 } from "@/lib/tools/gmail";
-import { addMemoryEntry } from "@/lib/memory";
+import { addMemoryEntry, searchMemoryEntries } from "@/lib/memory";
 import type {
   AgentToolArgs,
   AgentToolDefinition,
@@ -496,6 +496,91 @@ const calendarUpdateTool: AgentToolDefinition = {
   },
 };
 
+const searchMemoryParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    query: {
+      type: "string",
+      description: "Phrase to search for in saved user memory entries.",
+    },
+    limit: {
+      type: "integer",
+      description: "Maximum number of matches to return (1-20).",
+    },
+  },
+  required: ["query"],
+};
+
+const searchMemoryTool: AgentToolDefinition = {
+  name: "search_memory",
+  description:
+    "Search the user's saved memory entries when you need older facts or preferences that may not be in the current context block.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: searchMemoryParametersJsonSchema,
+  declaration: {
+    name: "search_memory",
+    description:
+      "Search saved long-term memory entries by text query and return the best matches.",
+    parametersJsonSchema: searchMemoryParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const queryResult = readRequiredStringArg(args, "query");
+    if (!queryResult.ok) {
+      return queryResult;
+    }
+
+    if (queryResult.value.length < 2) {
+      return { ok: false, error: "query must be at least 2 characters." };
+    }
+    if (queryResult.value.length > 120) {
+      return { ok: false, error: "query must be 120 characters or fewer." };
+    }
+
+    let limit = 5;
+    if (args.limit !== undefined) {
+      if (
+        typeof args.limit !== "number" ||
+        !Number.isFinite(args.limit) ||
+        !Number.isInteger(args.limit)
+      ) {
+        return { ok: false, error: "limit must be an integer between 1 and 20." };
+      }
+      limit = Math.min(Math.max(args.limit, 1), 20);
+    }
+
+    return {
+      ok: true,
+      value: {
+        query: queryResult.value,
+        limit,
+      },
+    };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const query = typeof args.query === "string" ? args.query : "(missing query)";
+    const limit = typeof args.limit === "number" ? args.limit : 5;
+    return `Search memory for "${query}" (top ${limit}).`;
+  },
+  async execute(ctx, args) {
+    const query = args.query as string;
+    const limit = typeof args.limit === "number" ? args.limit : 5;
+    const matches = await searchMemoryEntries({
+      uid: ctx.uid,
+      query,
+      limit,
+      scanLimit: 100,
+    });
+
+    return {
+      query,
+      resultCount: matches.length,
+      entries: matches,
+    };
+  },
+};
+
 const saveMemoryParametersJsonSchema: Record<string, unknown> = {
   type: "object",
   additionalProperties: false,
@@ -555,6 +640,7 @@ const saveMemoryTool: AgentToolDefinition = {
 };
 
 const agentTools: AgentToolDefinition[] = [
+  searchMemoryTool,
   saveMemoryTool,
   gmailDraftCreateTool,
   gmailThreadReadTool,

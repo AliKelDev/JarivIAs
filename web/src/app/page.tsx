@@ -5,7 +5,7 @@ import { readOnboardingStatus } from "@/lib/onboarding/status";
 export default async function HomePage() {
   const user = await getSessionUser();
   if (!user) {
-    redirect("/login");
+    redirect("/landing");
   }
 
   const onboarding = await readOnboardingStatus(user.uid);

@@ -32,6 +32,16 @@ export type RecentGmailMessage = {
   internalDateIso: string | null;
 };
 
+export type RecentGmailDraftItem = {
+  id: string;
+  messageId: string | null;
+  threadId: string | null;
+  to: string;
+  subject: string;
+  snippet: string;
+  updatedAtIso: string | null;
+};
+
 export type GmailThreadReadMessage = {
   id: string;
   threadId: string | null;
@@ -60,6 +70,20 @@ type ReadGmailThreadParams = {
   origin: string;
   threadId: string;
   maxMessages?: number;
+};
+
+type ListRecentGmailDraftsParams = {
+  uid: string;
+  origin: string;
+  maxResults?: number;
+};
+
+type SendGmailDraftParams = {
+  uid: string;
+  origin: string;
+  draftId: string;
+  auditType?: string;
+  auditMeta?: Record<string, unknown>;
 };
 
 function encodeBase64Url(value: string): string {
@@ -385,4 +409,137 @@ export async function createGmailDraftForUser(
     draftId,
     gmailLink: `https://mail.google.com/mail/#drafts/${draftId}`,
   };
+}
+
+export async function listGmailDraftsForUser(
+  params: ListRecentGmailDraftsParams,
+): Promise<RecentGmailDraftItem[]> {
+  const { uid, origin } = params;
+  const maxResults = Math.min(Math.max(params.maxResults ?? 8, 1), 20);
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_READONLY_SCOPE)) {
+    throw new Error("Missing required Gmail read scope. Reconnect Google Workspace.");
+  }
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+  const listResponse = await gmail.users.drafts.list({
+    userId: "me",
+    maxResults,
+  });
+
+  const draftRefs = listResponse.data.drafts ?? [];
+  if (draftRefs.length === 0) {
+    return [];
+  }
+
+  const drafts = await Promise.all(
+    draftRefs.map(async (draftRef) => {
+      if (!draftRef.id) {
+        return null;
+      }
+
+      // @ts-expect-error - metadataHeaders is missing in gapi types but valid in API
+      const detailsResp = await gmail.users.drafts.get({
+        userId: "me",
+        id: draftRef.id,
+        format: "metadata",
+        metadataHeaders: ["To", "Subject", "Date"],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const details = detailsResp as any;
+
+      const message = details.data.message;
+      if (!message) {
+        return null;
+      }
+
+      const headers = message.payload?.headers;
+      const internalDateMs = Number(message.internalDate);
+
+      return {
+        id: details.data.id ?? draftRef.id,
+        messageId: message.id ?? null,
+        threadId: message.threadId ?? null,
+        to: readGmailHeader(headers, "To") ?? "(No recipient)",
+        subject: readGmailHeader(headers, "Subject") ?? "(No subject)",
+        snippet: message.snippet?.trim() || "",
+        updatedAtIso: Number.isFinite(internalDateMs)
+          ? new Date(internalDateMs).toISOString()
+          : null,
+      } satisfies RecentGmailDraftItem;
+    }),
+  );
+
+  return drafts.filter((draft): draft is RecentGmailDraftItem => Boolean(draft));
+}
+
+export async function sendGmailDraftForUser(params: SendGmailDraftParams) {
+  const { uid, origin, draftId, auditType, auditMeta } = params;
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_COMPOSE_SCOPE)) {
+    throw new Error("Missing required Gmail compose scope. Reconnect Google Workspace.");
+  }
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+
+  // First, get the draft to find the recipient and subject for the audit log
+  let to = "(Unknown recipient)";
+  let subject = "(No subject)";
+  try {
+    // @ts-expect-error - metadataHeaders is missing in gapi types but valid in API
+    const detailsResp = await gmail.users.drafts.get({
+      userId: "me",
+      id: draftId,
+      format: "metadata",
+      metadataHeaders: ["To", "Subject"],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const details = detailsResp as any;
+
+    if (details.data.message?.payload?.headers) {
+      to = readGmailHeader(details.data.message.payload.headers, "To") ?? to;
+      subject = readGmailHeader(details.data.message.payload.headers, "Subject") ?? subject;
+    }
+  } catch {
+    // Graceful fallback if we can't read the draft before sending
+  }
+
+  // Send the draft
+  const sendResponse = await gmail.users.drafts.send({
+    userId: "me",
+    requestBody: {
+      id: draftId,
+    },
+  });
+
+  const messageId = sendResponse.data.id ?? null;
+  const threadId = sendResponse.data.threadId ?? null;
+
+  // Log to audit
+  await getFirebaseAdminDb().collection("audit").add({
+    uid,
+    type: auditType ?? "gmail_draft_send",
+    status: "completed",
+    to: normalizeEmailAddress(to),
+    subject,
+    draftId,
+    messageId,
+    threadId,
+    createdAt: FieldValue.serverTimestamp(),
+    ...(auditMeta ?? {}),
+  });
+
+  return { messageId, threadId };
 }

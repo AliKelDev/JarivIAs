@@ -137,6 +137,21 @@ type GmailRecentResponse = {
   messages: RecentInboxDigestItem[];
 };
 
+type RecentGmailDraftItem = {
+  id: string;
+  messageId: string | null;
+  threadId: string | null;
+  to: string;
+  subject: string;
+  snippet: string;
+  updatedAtIso: string | null;
+};
+
+type GmailDraftsResponse = {
+  ok: boolean;
+  drafts: RecentGmailDraftItem[];
+};
+
 type AgentTrustLevel = "supervised" | "delegated" | "autonomous";
 
 type AttachedContextItem = {
@@ -255,6 +270,13 @@ function isGmailRecentResponse(value: unknown): value is GmailRecentResponse {
     return false;
   }
   return Array.isArray((value as GmailRecentResponse).messages);
+}
+
+function isGmailDraftsResponse(value: unknown): value is GmailDraftsResponse {
+  if (!value || typeof value !== "object" || !("drafts" in value)) {
+    return false;
+  }
+  return Array.isArray((value as GmailDraftsResponse).drafts);
 }
 
 function isAgentTrustLevel(value: unknown): value is AgentTrustLevel {
@@ -437,11 +459,15 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [recentInboxMessages, setRecentInboxMessages] = useState<
     RecentInboxDigestItem[]
   >([]);
+  const [recentDrafts, setRecentDrafts] = useState<RecentGmailDraftItem[]>([]);
   const [workspaceRefreshedAt, setWorkspaceRefreshedAt] = useState<string | null>(
     null,
   );
   const [expandedCalendarDescriptions, setExpandedCalendarDescriptions] =
     useState<Record<string, boolean>>({});
+
+  const [draftSendLoadingId, setDraftSendLoadingId] = useState<string | null>(null);
+  const [draftConfirmId, setDraftConfirmId] = useState<string | null>(null);
 
   const [pinnedContext, setPinnedContext] = useState<AttachedContextItem[]>([]);
   const [chatExpanded, setChatExpanded] = useState(false);
@@ -583,17 +609,21 @@ export function DashboardClient({ user }: DashboardClientProps) {
     setWorkspaceError(null);
 
     try {
-      const [calendarResponse, inboxResponse] = await Promise.all([
+      const [calendarResponse, inboxResponse, draftsResponse] = await Promise.all([
         fetch("/api/tools/calendar/upcoming?limit=8", { cache: "no-store" }),
         fetch("/api/tools/gmail/recent?limit=8", { cache: "no-store" }),
+        fetch("/api/tools/gmail/drafts?limit=8", { cache: "no-store" }),
       ]);
 
-      const [calendarBody, inboxBody] = await Promise.all([
+      const [calendarBody, inboxBody, draftsBody] = await Promise.all([
         (calendarResponse.json().catch(() => null)) as Promise<
           CalendarUpcomingResponse | { error?: string } | null
         >,
         (inboxResponse.json().catch(() => null)) as Promise<
           GmailRecentResponse | { error?: string } | null
+        >,
+        (draftsResponse.json().catch(() => null)) as Promise<
+          GmailDraftsResponse | { error?: string } | null
         >,
       ]);
 
@@ -620,6 +650,14 @@ export function DashboardClient({ user }: DashboardClientProps) {
         setRecentInboxMessages([]);
       }
 
+      if (draftsResponse.ok && isGmailDraftsResponse(draftsBody)) {
+        setRecentDrafts(draftsBody.drafts);
+      } else {
+        setRecentDrafts([]);
+      }
+      setDraftConfirmId(null);
+      setDraftSendLoadingId(null);
+
       const errors: string[] = [];
       if (!calendarResponse.ok) {
         errors.push(
@@ -631,6 +669,11 @@ export function DashboardClient({ user }: DashboardClientProps) {
           readErrorMessage(inboxBody, "Inbox preview is currently unavailable."),
         );
       }
+      if (!draftsResponse.ok) {
+        errors.push(
+          readErrorMessage(draftsBody, "Drafts preview is currently unavailable."),
+        );
+      }
       setWorkspaceError(errors.length > 0 ? errors.join(" ") : null);
       setWorkspaceRefreshedAt(new Date().toISOString());
     } catch (caughtError) {
@@ -640,6 +683,9 @@ export function DashboardClient({ user }: DashboardClientProps) {
           : "Failed to load workspace snapshot.";
       setUpcomingEvents([]);
       setRecentInboxMessages([]);
+      setRecentDrafts([]);
+      setDraftConfirmId(null);
+      setDraftSendLoadingId(null);
       setExpandedCalendarDescriptions({});
       setWorkspaceError(message);
       setWorkspaceRefreshedAt(new Date().toISOString());
@@ -796,6 +842,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
     setUpcomingEvents([]);
     setRecentInboxMessages([]);
+    setRecentDrafts([]);
     setExpandedCalendarDescriptions({});
     setWorkspaceError(null);
     setWorkspaceRefreshedAt(null);
@@ -961,6 +1008,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
       } else {
         setUpcomingEvents([]);
         setRecentInboxMessages([]);
+        setRecentDrafts([]);
         setWorkspaceError(null);
         setWorkspaceRefreshedAt(null);
       }
@@ -1467,6 +1515,37 @@ export function DashboardClient({ user }: DashboardClientProps) {
     }
   }
 
+  async function handleSendDraft(draftId: string) {
+    if (draftConfirmId !== draftId) {
+      setDraftConfirmId(draftId);
+      return; // Wait for second click
+    }
+
+    setDraftSendLoadingId(draftId);
+
+    try {
+      const response = await fetch("/api/tools/gmail/drafts/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(readErrorMessage(body, "Failed to send draft."));
+      }
+
+      setRecentDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      setDraftConfirmId(null);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Failed to send draft.";
+      setWorkspaceError(message);
+      setDraftConfirmId(null);
+    } finally {
+      setDraftSendLoadingId(null);
+    }
+  }
+
   async function handleSaveProfile() {
     setProfileSaving(true);
     setProfileError(null);
@@ -1593,9 +1672,8 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   <button
                     key={option.value}
                     type="button"
-                    className={`${styles.trustLevelButton} ${
-                      isActive ? styles.trustLevelButtonActive : ""
-                    }`}
+                    className={`${styles.trustLevelButton} ${isActive ? styles.trustLevelButtonActive : ""
+                      }`}
                     disabled={agentTrustSubmitting || agentTrustLoading}
                     onClick={() => void handleSetAgentTrustLevel(option.value)}
                   >
@@ -1965,6 +2043,48 @@ export function DashboardClient({ user }: DashboardClientProps) {
                           Pin as context
                         </button>
                       )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </article>
+
+            <article className={styles.pulseCard}>
+              <h3 className={styles.cardTitle}>Recent Drafts</h3>
+              {workspaceLoading ? <p className={styles.meta}>Loading drafts...</p> : null}
+              {!workspaceLoading && recentDrafts.length === 0 ? (
+                <p className={styles.meta}>No recent drafts to show.</p>
+              ) : null}
+              <ul className={styles.pulseList}>
+                {recentDrafts.map((draft) => (
+                  <li key={draft.id} className={styles.pulseItem}>
+                    <div className={styles.pulseItemHead}>
+                      <p className={styles.pulseItemTitle}>{draft.subject}</p>
+                      <p className={styles.pulseItemMeta}>
+                        {formatDateTime(draft.updatedAtIso)}
+                      </p>
+                    </div>
+                    <p className={styles.pulseItemMeta}>{draft.to}</p>
+                    {draft.snippet ? (
+                      <p className={styles.pulseSnippet}>{draft.snippet}</p>
+                    ) : null}
+                    <div className={styles.pulseItemActions}>
+                      <a
+                        href={`https://mail.google.com/mail/u/0/#drafts/${draft.messageId ?? draft.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={styles.inlineLink}
+                      >
+                        Edit in Gmail
+                      </a>
+                      <button
+                        type="button"
+                        className={draftConfirmId === draft.id ? styles.runButton : styles.secondaryButton}
+                        onClick={() => void handleSendDraft(draft.id)}
+                        disabled={draftSendLoadingId === draft.id}
+                      >
+                        {draftSendLoadingId === draft.id ? "Sending..." : draftConfirmId === draft.id ? "Confirm send?" : "Send"}
+                      </button>
                     </div>
                   </li>
                 ))}
