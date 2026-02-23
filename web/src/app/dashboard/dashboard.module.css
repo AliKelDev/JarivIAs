@@ -482,12 +482,31 @@
   color: #1e3a52;
 }
 
-.briefingText p { margin: 0 0 0.5rem; }
-.briefingText p:last-child { margin-bottom: 0; }
-.briefingText ul, .briefingText ol { margin: 0.3rem 0 0.5rem 1.2rem; padding: 0; }
-.briefingText li { margin-bottom: 0.25rem; }
-.briefingText strong { color: #0f3050; }
-.briefingText h1, .briefingText h2, .briefingText h3 {
+.briefingText p {
+  margin: 0 0 0.5rem;
+}
+
+.briefingText p:last-child {
+  margin-bottom: 0;
+}
+
+.briefingText ul,
+.briefingText ol {
+  margin: 0.3rem 0 0.5rem 1.2rem;
+  padding: 0;
+}
+
+.briefingText li {
+  margin-bottom: 0.25rem;
+}
+
+.briefingText strong {
+  color: #0f3050;
+}
+
+.briefingText h1,
+.briefingText h2,
+.briefingText h3 {
   font-size: 0.95rem;
   font-weight: 600;
   margin: 0.7rem 0 0.3rem;
@@ -564,6 +583,134 @@
   background: #ffffff;
 }
 
+.thoughtBlock {
+  border-radius: 8px;
+  background: rgba(100, 80, 160, 0.05);
+  border: 1px solid rgba(100, 80, 160, 0.14);
+  overflow: hidden;
+}
+
+.thoughtToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6050a0;
+  letter-spacing: 0.03em;
+  text-align: left;
+}
+
+.thoughtToggle:hover {
+  background: rgba(100, 80, 160, 0.07);
+}
+
+.thoughtToggleIcon {
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.thoughtText {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  animation: thoughtExpand 220ms ease both;
+  padding: 0.55rem 0.85rem 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #5a4a8a;
+  border-top: 1px solid rgba(100, 80, 160, 0.1);
+}
+
+.thoughtText p {
+  margin: 0 0 0.5em;
+}
+
+.thoughtText p:last-child {
+  margin-bottom: 0;
+}
+
+.thoughtText strong {
+  color: #3d2e7a;
+  font-weight: 600;
+}
+
+.thoughtText ul,
+.thoughtText ol {
+  margin: 0.3em 0 0.5em 1.2em;
+  padding: 0;
+}
+
+.thoughtText li {
+  margin-bottom: 0.2em;
+}
+
+.thinkingSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(47, 111, 101, 0.06);
+  border: 1px solid rgba(47, 111, 101, 0.14);
+}
+
+.thinkingStep {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #395f54;
+  animation: stepSlideIn 180ms ease both;
+}
+
+.thinkingStep:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.thinkingStep:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.thinkingStep:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.thinkingStep:nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.thinkingStep:nth-child(5) {
+  animation-delay: 240ms;
+}
+
+.thinkingStepIcon {
+  font-size: 0.72rem;
+  color: #2f8070;
+  flex-shrink: 0;
+}
+
+.thinkingStepName {
+  font-weight: 600;
+  color: #2a5a4e;
+  flex-shrink: 0;
+}
+
+.thinkingStepPreview {
+  color: #5a7a72;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 340px;
+}
+
 .chatRole {
   font-size: 0.76rem;
   text-transform: uppercase;
@@ -595,9 +742,17 @@
   color: #1a2f42;
 }
 
-.chatText h1 { font-size: 1.15em; }
-.chatText h2 { font-size: 1.05em; }
-.chatText h3 { font-size: 0.97em; }
+.chatText h1 {
+  font-size: 1.15em;
+}
+
+.chatText h2 {
+  font-size: 1.05em;
+}
+
+.chatText h3 {
+  font-size: 0.97em;
+}
 
 .chatText ul,
 .chatText ol {
@@ -822,20 +977,24 @@
 }
 
 @keyframes driftOne {
+
   0%,
   100% {
     transform: translate(0, 0);
   }
+
   50% {
     transform: translate(-18px, 12px);
   }
 }
 
 @keyframes driftTwo {
+
   0%,
   100% {
     transform: translate(0, 0);
   }
+
   50% {
     transform: translate(20px, -10px);
   }
@@ -846,9 +1005,46 @@
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fadeInMessage {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes stepSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes thoughtExpand {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
   }
 }
 
@@ -891,4 +1087,61 @@
   .panelHeader {
     align-items: flex-start;
   }
+}
+
+/* ── Activity timeline badges ─────────────────────────────── */
+
+.activityMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.05rem;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.statusBadgeDone {
+  background: #e6f5ef;
+  color: #1e6b47;
+  border-color: rgba(30, 107, 71, 0.22);
+}
+
+.statusBadgePending {
+  background: #fef7e8;
+  color: #8a5e12;
+  border-color: rgba(138, 94, 18, 0.22);
+}
+
+.statusBadgeFailed {
+  background: #fdecea;
+  color: #8a2020;
+  border-color: rgba(138, 32, 32, 0.22);
+}
+
+.toolChip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.74rem;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #34526b;
+  background: rgba(37, 84, 120, 0.07);
+  border: 1px solid rgba(37, 84, 120, 0.18);
+  border-radius: 6px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }

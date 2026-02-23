@@ -110,8 +110,9 @@ export async function generateGeminiAgentPlan(params: {
   toolDeclarations: FunctionDeclaration[];
   systemInstruction: string;
   onTextDelta?: (delta: string) => void | Promise<void>;
+  onThoughtDelta?: (delta: string) => void | Promise<void>;
 }): Promise<AgentPlan> {
-  const { conversation, toolDeclarations, systemInstruction, onTextDelta } = params;
+  const { conversation, toolDeclarations, systemInstruction, onTextDelta, onThoughtDelta } = params;
   const client = getGeminiClient();
   const model = readModelName();
 
@@ -139,6 +140,9 @@ export async function generateGeminiAgentPlan(params: {
       functionCallingConfig: {
         mode: FunctionCallingConfigMode.AUTO,
       },
+    },
+    thinkingConfig: {
+      includeThoughts: true,
     },
   };
 
@@ -174,10 +178,16 @@ export async function generateGeminiAgentPlan(params: {
   let usage: AgentPlan["usage"] = null;
 
   for await (const chunk of stream) {
-    const delta = chunk.text ?? "";
-    if (delta.length > 0) {
-      text += delta;
-      await onTextDelta(delta);
+    const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+    for (const part of parts) {
+      const partText = part.text ?? "";
+      if (!partText) continue;
+      if (part.thought === true) {
+        if (onThoughtDelta) await onThoughtDelta(partText);
+      } else {
+        text += partText;
+        await onTextDelta(partText);
+      }
     }
 
     if (chunk.functionCalls?.length) {

@@ -20,6 +20,7 @@ type AgentRunRequestBody = {
 type StreamEvent =
   | { type: "status"; status: string; threadId: string }
   | { type: "delta"; delta: string }
+  | { type: "thought_delta"; delta: string }
   | { type: "tool_call"; toolName: string; preview: string }
   | { type: "result"; result: Record<string, unknown> }
   | { type: "error"; error: string };
@@ -76,6 +77,10 @@ export async function POST(request: NextRequest) {
           onTextDelta: async (delta) => {
             if (!delta || delta.length === 0) return;
             push({ type: "delta", delta });
+          },
+          onThoughtDelta: async (delta) => {
+            if (!delta || delta.length === 0) return;
+            push({ type: "thought_delta", delta });
           },
           onToolCall: async (toolName, preview) => {
             push({ type: "tool_call", toolName, preview });

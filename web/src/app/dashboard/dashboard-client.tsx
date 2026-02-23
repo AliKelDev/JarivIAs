@@ -100,6 +100,7 @@ type AgentThreadResponse = {
 type AgentRunStreamEvent =
   | { type: "status"; status: string; threadId: string }
   | { type: "delta"; delta: string }
+  | { type: "thought_delta"; delta: string }
   | { type: "tool_call"; toolName: string; preview: string }
   | { type: "result"; result: RunResponse }
   | { type: "error"; error: string };
@@ -273,6 +274,7 @@ function isAgentRunStreamEvent(value: unknown): value is AgentRunStreamEvent {
   return (
     event.type === "status" ||
     event.type === "delta" ||
+    event.type === "thought_delta" ||
     event.type === "tool_call" ||
     event.type === "result" ||
     event.type === "error"
@@ -398,14 +400,21 @@ function formatTrustLevelLabel(level: AgentTrustLevel): string {
   return match?.label ?? level;
 }
 
-function formatRunStatus(status: string): string {
+
+
+function getRunStatusBadge(status: string): { label: string; variant: "done" | "pending" | "failed" } {
   switch (status) {
-    case "completed": return "✓ Completed";
-    case "failed": return "✗ Failed";
-    case "awaiting_confirmation": return "⏳ Awaiting approval";
-    case "planning": return "… Planning";
-    case "executing": return "… Executing";
-    default: return status;
+    case "completed":
+      return { label: "✓ done", variant: "done" };
+    case "failed":
+      return { label: "✗ failed", variant: "failed" };
+    case "awaiting_confirmation":
+      return { label: "⏳ pending", variant: "pending" };
+    case "planning":
+    case "executing":
+      return { label: "⏳ pending", variant: "pending" };
+    default:
+      return { label: status, variant: "pending" };
   }
 }
 
@@ -480,6 +489,8 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [streamingAssistantText, setStreamingAssistantText] = useState("");
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState<{ toolName: string; preview: string }[]>([]);
+  const [thoughtText, setThoughtText] = useState("");
+  const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [runResult, setRunResult] = useState<RunResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [agentPendingApproval, setAgentPendingApproval] =
@@ -1227,6 +1238,9 @@ export function DashboardClient({ user }: DashboardClientProps) {
     setAgentApprovalError(null);
     setAgentApprovalResult(null);
     setStreamingAssistantText("");
+    setThinkingSteps([]);
+    setThoughtText("");
+    setThoughtExpanded(false);
     setAgentMessages((previous) => [...previous, optimisticUserMessage]);
     setPrompt("");
 
@@ -1300,6 +1314,21 @@ export function DashboardClient({ user }: DashboardClientProps) {
               streamedAssistantText += parsed.delta;
               setStreamingAssistantText(streamedAssistantText);
             }
+            continue;
+          }
+
+          if (parsed.type === "thought_delta") {
+            if (typeof parsed.delta === "string" && parsed.delta.length > 0) {
+              setThoughtText((prev) => {
+                if (prev.length === 0) setThoughtExpanded(true);
+                return prev + parsed.delta;
+              });
+            }
+            continue;
+          }
+
+          if (parsed.type === "tool_call") {
+            setThinkingSteps((prev) => [...prev, { toolName: parsed.toolName, preview: parsed.preview }]);
             continue;
           }
 
@@ -1784,6 +1813,227 @@ export function DashboardClient({ user }: DashboardClientProps) {
             )}
           </section>
         ) : null}
+
+        <section className={chatExpanded ? `${styles.panel} ${styles.panelChatExpanded}` : styles.panel}>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>Alik</h2>
+            <div className={styles.buttonRow}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={handleStartNewConversation}
+              >
+                New conversation
+              </button>
+              {agentThreadId ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => openAgentThread(agentThreadId)}
+                  disabled={agentThreadOpeningId === agentThreadId}
+                >
+                  {agentThreadOpeningId === agentThreadId ? "Refreshing..." : "Refresh thread"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setChatExpanded((v) => !v)}
+              >
+                {chatExpanded ? "Collapse" : "Expand"}
+              </button>
+            </div>
+          </div>
+
+          <div ref={chatLogRef} className={chatExpanded ? `${styles.chatLog} ${styles.chatLogExpanded}` : styles.chatLog}>
+            {agentThreadLoading ? (
+              <p className={styles.meta}>Loading conversation...</p>
+            ) : null}
+            {agentMessages.length === 0 && !agentThreadLoading ? (
+              <p className={styles.meta}>
+                No messages yet. Ask Alik to plan, email, or schedule something.
+              </p>
+            ) : null}
+            {agentMessages.map((message) => (
+              <article
+                key={message.id}
+                className={
+                  message.role === "user"
+                    ? styles.chatMessageUser
+                    : styles.chatMessageAssistant
+                }
+              >
+                <p className={styles.chatRole}>
+                  {message.role === "user" ? "You" : "Alik"}
+                </p>
+                <div className={styles.chatText}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ href, children }) => (
+                        <a href={href} target="_blank" rel="noreferrer">{children}</a>
+                      ),
+                    }}
+                  >{message.text}</ReactMarkdown>
+                </div>
+              </article>
+            ))}
+            {isSubmittingRun && thinkingSteps.length > 0 ? (
+              <div className={styles.thinkingSteps}>
+                {thinkingSteps.map((step, i) => (
+                  <div key={i} className={styles.thinkingStep}>
+                    <span className={styles.thinkingStepIcon}>→</span>
+                    <span className={styles.thinkingStepName}>{step.toolName}</span>
+                    {step.preview ? <span className={styles.thinkingStepPreview}>{step.preview}</span> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {isSubmittingRun && streamingAssistantText.trim().length > 0 ? (
+              <article className={`${styles.chatMessageAssistant} ${styles.streamingMessage}`}>
+                <p className={styles.chatRole}>Alik</p>
+                <div className={styles.chatText}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ href, children }) => (
+                        <a href={href} target="_blank" rel="noreferrer">{children}</a>
+                      ),
+                    }}
+                  >{streamingAssistantText}</ReactMarkdown>
+                </div>
+              </article>
+            ) : null}
+            {isSubmittingRun && streamingAssistantText.trim().length === 0 ? (
+              <p className={styles.meta}>
+                {thinkingSteps.length > 0 ? "Waiting for response..." : "Alik is thinking..."}
+              </p>
+            ) : null}
+          </div>
+
+          {thoughtText.length > 0 ? (
+            <div className={styles.thoughtBlock}>
+              <button
+                type="button"
+                className={styles.thoughtToggle}
+                onClick={() => setThoughtExpanded((v) => !v)}
+              >
+                <span className={styles.thoughtToggleIcon}>{thoughtExpanded ? "▾" : "▸"}</span>
+                {isSubmittingRun ? "Thinking…" : "Thought process"}
+              </button>
+              {thoughtExpanded ? (
+                <div className={styles.thoughtText}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{thoughtText}</ReactMarkdown>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {pinnedContext.length > 0 ? (
+            <div className={styles.pinnedContextBar}>
+              <span className={styles.pinnedContextBarLabel}>Context:</span>
+              {pinnedContext.map((item) => (
+                <span key={item.id} className={styles.contextChip}>
+                  {item.title ? item.title.slice(0, 40) : item.id}
+                  <button
+                    type="button"
+                    className={styles.contextChipRemove}
+                    onClick={() =>
+                      setPinnedContext((prev) => prev.filter((c) => c.id !== item.id))
+                    }
+                    aria-label={`Remove ${item.title ?? item.id} from context`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <label htmlFor="prompt" className={styles.label}>
+            Your message
+          </label>
+          <textarea
+            id="prompt"
+            className={styles.chatComposer}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            placeholder="Ask Alik to draft an email, create an event, or plan work..."
+          />
+          <button
+            type="button"
+            className={styles.runButton}
+            onClick={handleRunAgentStub}
+            disabled={isSubmittingRun || prompt.trim().length === 0}
+          >
+            {isSubmittingRun ? "Sending..." : "Send"}
+          </button>
+
+          {agentPendingApproval ? (
+            <div className={styles.approvalCard}>
+              <p className={styles.approvalTitle}>Agent Approval Required</p>
+              <p className={styles.meta}>
+                Tool: <strong>{agentPendingApproval.tool}</strong>
+              </p>
+              <p className={styles.meta}>{agentPendingApproval.reason}</p>
+              <pre className={styles.result}>{agentPendingApproval.preview}</pre>
+              <label className={styles.label}>
+                If rejecting, what should change? (optional)
+                <textarea
+                  className={styles.textarea}
+                  value={agentApprovalFeedback}
+                  onChange={(event) => setAgentApprovalFeedback(event.target.value)}
+                  placeholder="e.g., adjust recipient/date/content..."
+                />
+              </label>
+              <div className={styles.buttonRow}>
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  onClick={() => void handleResolveAgentApproval("reject")}
+                  disabled={agentApprovalSubmitting}
+                >
+                  {agentApprovalSubmitting ? "Working..." : "No"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.runButton}
+                  onClick={() => void handleResolveAgentApproval("approve_once")}
+                  disabled={agentApprovalSubmitting}
+                >
+                  {agentApprovalSubmitting ? "Working..." : "Yes"}
+                </button>
+                {agentPendingApproval.tool === "gmail_send" ? (
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() =>
+                      void handleResolveAgentApproval(
+                        "approve_and_always_allow_recipient",
+                      )
+                    }
+                    disabled={agentApprovalSubmitting}
+                  >
+                    {agentApprovalSubmitting
+                      ? "Working..."
+                      : "Yes and always allow for this recipient"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {agentApprovalError ? <p className={styles.error}>{agentApprovalError}</p> : null}
+          {agentApprovalResult ? (
+            <pre className={styles.result}>
+              {JSON.stringify(agentApprovalResult, null, 2)}
+            </pre>
+          ) : null}
+          {runError ? <p className={styles.error}>{runError}</p> : null}
+          {runResult ? (
+            <pre className={styles.result}>{JSON.stringify(runResult, null, 2)}</pre>
+          ) : null}
+        </section>
 
         <section className={`${styles.panel} ${styles.heroPanel}`}>
           <p className={styles.heroLead}>
@@ -2283,196 +2533,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
           ) : null}
         </section>
 
-        <section className={chatExpanded ? `${styles.panel} ${styles.panelChatExpanded}` : styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Alik</h2>
-            <div className={styles.buttonRow}>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={handleStartNewConversation}
-              >
-                New conversation
-              </button>
-              {agentThreadId ? (
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => openAgentThread(agentThreadId)}
-                  disabled={agentThreadOpeningId === agentThreadId}
-                >
-                  {agentThreadOpeningId === agentThreadId ? "Refreshing..." : "Refresh thread"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => setChatExpanded((v) => !v)}
-              >
-                {chatExpanded ? "Collapse" : "Expand"}
-              </button>
-            </div>
-          </div>
-
-          <div ref={chatLogRef} className={chatExpanded ? `${styles.chatLog} ${styles.chatLogExpanded}` : styles.chatLog}>
-            {agentThreadLoading ? (
-              <p className={styles.meta}>Loading conversation...</p>
-            ) : null}
-            {agentMessages.length === 0 && !agentThreadLoading ? (
-              <p className={styles.meta}>
-                No messages yet. Ask Alik to plan, email, or schedule something.
-              </p>
-            ) : null}
-            {agentMessages.map((message) => (
-              <article
-                key={message.id}
-                className={
-                  message.role === "user"
-                    ? styles.chatMessageUser
-                    : styles.chatMessageAssistant
-                }
-              >
-                <p className={styles.chatRole}>
-                  {message.role === "user" ? "You" : "Alik"}
-                </p>
-                <div className={styles.chatText}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a: ({ href, children }) => (
-                        <a href={href} target="_blank" rel="noreferrer">{children}</a>
-                      ),
-                    }}
-                  >{message.text}</ReactMarkdown>
-                </div>
-              </article>
-            ))}
-            {isSubmittingRun && streamingAssistantText.trim().length > 0 ? (
-              <article className={styles.chatMessageAssistant}>
-                <p className={styles.chatRole}>Alik</p>
-                <div className={styles.chatText}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a: ({ href, children }) => (
-                        <a href={href} target="_blank" rel="noreferrer">{children}</a>
-                      ),
-                    }}
-                  >{streamingAssistantText}</ReactMarkdown>
-                </div>
-              </article>
-            ) : null}
-            {isSubmittingRun && streamingAssistantText.trim().length === 0 ? (
-              <p className={styles.meta}>Alik is thinking...</p>
-            ) : null}
-          </div>
-
-          {pinnedContext.length > 0 ? (
-            <div className={styles.pinnedContextBar}>
-              <span className={styles.pinnedContextBarLabel}>Context:</span>
-              {pinnedContext.map((item) => (
-                <span key={item.id} className={styles.contextChip}>
-                  {item.title ? item.title.slice(0, 40) : item.id}
-                  <button
-                    type="button"
-                    className={styles.contextChipRemove}
-                    onClick={() =>
-                      setPinnedContext((prev) => prev.filter((c) => c.id !== item.id))
-                    }
-                    aria-label={`Remove ${item.title ?? item.id} from context`}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <label htmlFor="prompt" className={styles.label}>
-            Your message
-          </label>
-          <textarea
-            id="prompt"
-            className={styles.chatComposer}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Ask Alik to draft an email, create an event, or plan work..."
-          />
-          <button
-            type="button"
-            className={styles.runButton}
-            onClick={handleRunAgentStub}
-            disabled={isSubmittingRun || prompt.trim().length === 0}
-          >
-            {isSubmittingRun ? "Sending..." : "Send"}
-          </button>
-
-          {agentPendingApproval ? (
-            <div className={styles.approvalCard}>
-              <p className={styles.approvalTitle}>Agent Approval Required</p>
-              <p className={styles.meta}>
-                Tool: <strong>{agentPendingApproval.tool}</strong>
-              </p>
-              <p className={styles.meta}>{agentPendingApproval.reason}</p>
-              <pre className={styles.result}>{agentPendingApproval.preview}</pre>
-              <label className={styles.label}>
-                If rejecting, what should change? (optional)
-                <textarea
-                  className={styles.textarea}
-                  value={agentApprovalFeedback}
-                  onChange={(event) => setAgentApprovalFeedback(event.target.value)}
-                  placeholder="e.g., adjust recipient/date/content..."
-                />
-              </label>
-              <div className={styles.buttonRow}>
-                <button
-                  type="button"
-                  className={styles.dangerButton}
-                  onClick={() => void handleResolveAgentApproval("reject")}
-                  disabled={agentApprovalSubmitting}
-                >
-                  {agentApprovalSubmitting ? "Working..." : "No"}
-                </button>
-                <button
-                  type="button"
-                  className={styles.runButton}
-                  onClick={() => void handleResolveAgentApproval("approve_once")}
-                  disabled={agentApprovalSubmitting}
-                >
-                  {agentApprovalSubmitting ? "Working..." : "Yes"}
-                </button>
-                {agentPendingApproval.tool === "gmail_send" ? (
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() =>
-                      void handleResolveAgentApproval(
-                        "approve_and_always_allow_recipient",
-                      )
-                    }
-                    disabled={agentApprovalSubmitting}
-                  >
-                    {agentApprovalSubmitting
-                      ? "Working..."
-                      : "Yes and always allow for this recipient"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {agentApprovalError ? <p className={styles.error}>{agentApprovalError}</p> : null}
-          {agentApprovalResult ? (
-            <pre className={styles.result}>
-              {JSON.stringify(agentApprovalResult, null, 2)}
-            </pre>
-          ) : null}
-          {runError ? <p className={styles.error}>{runError}</p> : null}
-          {runResult ? (
-            <pre className={styles.result}>{JSON.stringify(runResult, null, 2)}</pre>
-          ) : null}
-        </section>
-
         <section className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>Past Conversations</h2>
@@ -2516,8 +2576,8 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   {agentThreadOpeningId === thread.id
                     ? "Opening..."
                     : thread.id === agentThreadId
-                    ? "Currently open"
-                    : "Open →"}
+                      ? "Currently open"
+                      : "Open →"}
                 </button>
               </li>
             ))}
@@ -2559,11 +2619,24 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   </p>
                   <p className={styles.pulseItemMeta}>{formatDateTime(run.createdAt)}</p>
                 </div>
-                <p className={styles.pulseItemMeta}>
-                  {formatRunStatus(run.status)}
-                  {run.tool ? ` · ${run.tool}` : ""}
-                  {run.model ? ` · ${run.model}` : ""}
-                </p>
+                <div className={styles.activityMeta}>
+                  {(() => {
+                    const badge = getRunStatusBadge(run.status);
+                    const badgeClass =
+                      badge.variant === "done"
+                        ? `${styles.statusBadge} ${styles.statusBadgeDone}`
+                        : badge.variant === "failed"
+                          ? `${styles.statusBadge} ${styles.statusBadgeFailed}`
+                          : `${styles.statusBadge} ${styles.statusBadgePending}`;
+                    return <span className={badgeClass}>{badge.label}</span>;
+                  })()}
+                  {run.tool ? (
+                    <span className={styles.toolChip}>{run.tool}</span>
+                  ) : null}
+                  {run.model ? (
+                    <span className={styles.pulseItemMeta}>· {run.model}</span>
+                  ) : null}
+                </div>
                 {run.summary && run.summary !== run.prompt ? (
                   <p className={styles.pulseSnippet}>
                     {truncateWithEllipsis(run.summary, 160)}

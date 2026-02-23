@@ -433,6 +433,7 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         toolDeclarations: toolSet.declarations,
         systemInstruction,
         onTextDelta: request.onTextDelta,
+        onThoughtDelta: request.onThoughtDelta,
       });
       lastModelUsed = plan.model;
       await ensureInitialized();
