@@ -1,8 +1,13 @@
 import {
   createCalendarEventForUser,
   isIsoDate,
+  searchCalendarEventsForUser,
   updateCalendarEventForUser,
 } from "@/lib/tools/calendar";
+import {
+  listSlackChannelsForUser,
+  readSlackMessagesForUser,
+} from "@/lib/tools/slack";
 import {
   createGmailDraftForUser,
   isValidEmailAddress,
@@ -639,14 +644,199 @@ const saveMemoryTool: AgentToolDefinition = {
   },
 };
 
+const calendarSearchParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    query: {
+      type: "string",
+      description:
+        "Optional text to search for in event titles, descriptions, locations, and attendees.",
+    },
+    timeMin: {
+      type: "string",
+      description:
+        "Start of the search window in ISO-8601 format. Defaults to now.",
+    },
+    timeMax: {
+      type: "string",
+      description:
+        "End of the search window in ISO-8601 format. Defaults to 30 days from now.",
+    },
+    maxResults: {
+      type: "integer",
+      description: "Maximum number of events to return (1-20). Defaults to 10.",
+    },
+  },
+};
+
+const calendarSearchTool: AgentToolDefinition = {
+  name: "calendar_search",
+  description:
+    "Search the user's Google Calendar for events in a given time window. " +
+    "Use this when the user asks about upcoming events, availability, or meetings — " +
+    "especially mid-conversation when calendar context wasn't provided upfront.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: calendarSearchParametersJsonSchema,
+  declaration: {
+    name: "calendar_search",
+    description:
+      "Search Google Calendar events by optional query and time range. Returns matching events with title, time, location, and link.",
+    parametersJsonSchema: calendarSearchParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    if (args.timeMin !== undefined) {
+      if (typeof args.timeMin !== "string" || !isIsoDate(args.timeMin)) {
+        return { ok: false, error: "timeMin must be a valid ISO datetime string." };
+      }
+    }
+    if (args.timeMax !== undefined) {
+      if (typeof args.timeMax !== "string" || !isIsoDate(args.timeMax)) {
+        return { ok: false, error: "timeMax must be a valid ISO datetime string." };
+      }
+    }
+    if (args.maxResults !== undefined) {
+      if (
+        typeof args.maxResults !== "number" ||
+        !Number.isInteger(args.maxResults)
+      ) {
+        return { ok: false, error: "maxResults must be an integer between 1 and 20." };
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        query: typeof args.query === "string" ? args.query.trim() : undefined,
+        timeMin: typeof args.timeMin === "string" ? args.timeMin : undefined,
+        timeMax: typeof args.timeMax === "string" ? args.timeMax : undefined,
+        maxResults:
+          typeof args.maxResults === "number"
+            ? Math.min(Math.max(Math.floor(args.maxResults), 1), 20)
+            : undefined,
+      },
+    };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const q = typeof args.query === "string" && args.query ? ` "${args.query}"` : "";
+    return `Search calendar${q}.`;
+  },
+  async execute(ctx, args) {
+    const results = await searchCalendarEventsForUser({
+      uid: ctx.uid,
+      origin: ctx.origin,
+      query: typeof args.query === "string" ? args.query : undefined,
+      timeMinIso: typeof args.timeMin === "string" ? args.timeMin : undefined,
+      timeMaxIso: typeof args.timeMax === "string" ? args.timeMax : undefined,
+      maxResults: typeof args.maxResults === "number" ? args.maxResults : undefined,
+    });
+    return { resultCount: results.length, events: results };
+  },
+};
+
+const slackChannelsParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {},
+};
+
+const slackChannelsTool: AgentToolDefinition = {
+  name: "slack_channels",
+  description:
+    "List the user's Slack channels so you can find the right channel ID before reading messages. " +
+    "Requires the user to have configured a Slack User Token in dashboard settings.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: slackChannelsParametersJsonSchema,
+  declaration: {
+    name: "slack_channels",
+    description: "List available Slack channels for the connected workspace.",
+    parametersJsonSchema: slackChannelsParametersJsonSchema,
+  },
+  validateArgs(): AgentToolValidationResult {
+    return { ok: true, value: {} };
+  },
+  previewForApproval(): string {
+    return "List Slack channels.";
+  },
+  async execute(ctx) {
+    const channels = await listSlackChannelsForUser(ctx.uid);
+    return { channelCount: channels.length, channels };
+  },
+};
+
+const slackReadParametersJsonSchema: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    channelId: {
+      type: "string",
+      description: "Slack channel ID to read messages from. Use slack_channels to find the ID.",
+    },
+    limit: {
+      type: "integer",
+      description: "Number of messages to return (1-50). Defaults to 20.",
+    },
+  },
+  required: ["channelId"],
+};
+
+const slackReadTool: AgentToolDefinition = {
+  name: "slack_read",
+  description:
+    "Read recent messages from a Slack channel. " +
+    "Use slack_channels first to get the channel ID. " +
+    "Requires the user to have configured a Slack User Token in dashboard settings.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: slackReadParametersJsonSchema,
+  declaration: {
+    name: "slack_read",
+    description: "Read recent messages from a Slack channel by channel ID.",
+    parametersJsonSchema: slackReadParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const channelIdResult = readRequiredStringArg(args, "channelId");
+    if (!channelIdResult.ok) return channelIdResult;
+
+    let limit = 20;
+    if (args.limit !== undefined) {
+      if (
+        typeof args.limit !== "number" ||
+        !Number.isInteger(args.limit)
+      ) {
+        return { ok: false, error: "limit must be an integer between 1 and 50." };
+      }
+      limit = Math.min(Math.max(args.limit, 1), 50);
+    }
+
+    return { ok: true, value: { channelId: channelIdResult.value, limit } };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const channelId = typeof args.channelId === "string" ? args.channelId : "(missing)";
+    return `Read Slack messages from channel ${channelId}.`;
+  },
+  async execute(ctx, args) {
+    const messages = await readSlackMessagesForUser(
+      ctx.uid,
+      args.channelId as string,
+      typeof args.limit === "number" ? args.limit : 20,
+    );
+    return { messageCount: messages.length, messages };
+  },
+};
+
 const agentTools: AgentToolDefinition[] = [
   searchMemoryTool,
   saveMemoryTool,
   gmailDraftCreateTool,
   gmailThreadReadTool,
   gmailSendTool,
+  calendarSearchTool,
   calendarCreateTool,
   calendarUpdateTool,
+  slackChannelsTool,
+  slackReadTool,
 ];
 
 export function getAgentToolSet(): AgentToolSet {

@@ -152,6 +152,25 @@ type GmailDraftsResponse = {
   drafts: RecentGmailDraftItem[];
 };
 
+type BriefingPrepareResponse = {
+  ok: boolean;
+  cached: boolean;
+  summary: string;
+  dateKey: string;
+  timezone: string;
+  source: string;
+  generatedAtIso: string | null;
+  metadata?: {
+    eventCount?: number;
+    messageCount?: number;
+  };
+};
+
+type SlackSettingsResponse = {
+  ok: boolean;
+  hasToken: boolean;
+};
+
 type AgentTrustLevel = "supervised" | "delegated" | "autonomous";
 
 type AttachedContextItem = {
@@ -204,22 +223,22 @@ const AGENT_TRUST_LEVEL_OPTIONS: Array<{
   label: string;
   summary: string;
 }> = [
-  {
-    value: "supervised",
-    label: "Supervised",
-    summary: "Ask before every side-effect action.",
-  },
-  {
-    value: "delegated",
-    label: "Delegated",
-    summary: "Auto-send to allowlisted recipients, ask for other side effects.",
-  },
-  {
-    value: "autonomous",
-    label: "Autonomous",
-    summary: "Allow side-effect actions and report outcomes.",
-  },
-];
+    {
+      value: "supervised",
+      label: "Supervised",
+      summary: "Ask before every side-effect action.",
+    },
+    {
+      value: "delegated",
+      label: "Delegated",
+      summary: "Auto-send to allowlisted recipients, ask for other side effects.",
+    },
+    {
+      value: "autonomous",
+      label: "Autonomous",
+      summary: "Allow side-effect actions and report outcomes.",
+    },
+  ];
 
 function isAgentPendingApprovalsResponse(
   value: unknown,
@@ -277,6 +296,36 @@ function isGmailDraftsResponse(value: unknown): value is GmailDraftsResponse {
     return false;
   }
   return Array.isArray((value as GmailDraftsResponse).drafts);
+}
+
+function isBriefingPrepareResponse(
+  value: unknown,
+): value is BriefingPrepareResponse {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("summary" in value) ||
+    !("dateKey" in value)
+  ) {
+    return false;
+  }
+
+  const typed = value as BriefingPrepareResponse;
+  return (
+    typeof typed.summary === "string" &&
+    typeof typed.dateKey === "string" &&
+    typeof typed.cached === "boolean"
+  );
+}
+
+function isSlackSettingsResponse(value: unknown): value is SlackSettingsResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  return (
+    "hasToken" in value &&
+    typeof (value as { hasToken?: unknown }).hasToken === "boolean"
+  );
 }
 
 function isAgentTrustLevel(value: unknown): value is AgentTrustLevel {
@@ -472,6 +521,13 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [pinnedContext, setPinnedContext] = useState<AttachedContextItem[]>([]);
   const [chatExpanded, setChatExpanded] = useState(false);
   const [isBriefingLoading, setIsBriefingLoading] = useState(false);
+  const [preparedBriefingSummary, setPreparedBriefingSummary] = useState<
+    string | null
+  >(null);
+  const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<
+    string | null
+  >(null);
+  const [preparedBriefingConsumed, setPreparedBriefingConsumed] = useState(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
 
   const [activityRuns, setActivityRuns] = useState<ActivityRun[]>([]);
@@ -497,6 +553,13 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  const [slackToken, setSlackToken] = useState("");
+  const [slackHasToken, setSlackHasToken] = useState(false);
+  const [slackChecking, setSlackChecking] = useState(false);
+  const [slackSaving, setSlackSaving] = useState(false);
+  const [slackSaved, setSlackSaved] = useState(false);
+  const [slackError, setSlackError] = useState<string | null>(null);
 
   const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
   const [memoryLoading, setMemoryLoading] = useState(true);
@@ -759,6 +822,61 @@ export function DashboardClient({ user }: DashboardClientProps) {
     }
   }, []);
 
+  const loadSlackStatus = useCallback(async () => {
+    setSlackChecking(true);
+    setSlackError(null);
+    try {
+      const response = await fetch("/api/user/settings/slack", { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as
+        | SlackSettingsResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok || !isSlackSettingsResponse(body)) {
+        throw new Error(readErrorMessage(body, "Failed to load Slack settings."));
+      }
+
+      setSlackHasToken(body.hasToken);
+    } catch (caughtError) {
+      setSlackHasToken(false);
+      setSlackError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to load Slack settings.",
+      );
+    } finally {
+      setSlackChecking(false);
+    }
+  }, []);
+
+  const prepareBriefing = useCallback(async () => {
+    try {
+      const response = await fetch("/api/agent/briefing/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const body = (await response.json().catch(() => null)) as
+        | BriefingPrepareResponse
+        | { error?: string }
+        | null;
+
+      if (!response.ok || !isBriefingPrepareResponse(body)) {
+        return;
+      }
+
+      const summary = body.summary.trim();
+      if (summary.length === 0) {
+        return;
+      }
+
+      setPreparedBriefingSummary(summary);
+      setPreparedBriefingDateKey(body.dateKey);
+      setPreparedBriefingConsumed(false);
+    } catch {
+      // Keep this silent; briefing prep is best-effort.
+    }
+  }, []);
+
   async function handleDeleteMemoryEntry(id: string) {
     setMemoryDeletingId(id);
     try {
@@ -837,16 +955,20 @@ export function DashboardClient({ user }: DashboardClientProps) {
     const status = await refreshGoogleStatus();
     if (status?.connected) {
       await refreshWorkspaceSnapshot();
+      void prepareBriefing();
       return;
     }
 
     setUpcomingEvents([]);
     setRecentInboxMessages([]);
     setRecentDrafts([]);
+    setPreparedBriefingSummary(null);
+    setPreparedBriefingDateKey(null);
+    setPreparedBriefingConsumed(false);
     setExpandedCalendarDescriptions({});
     setWorkspaceError(null);
     setWorkspaceRefreshedAt(null);
-  }, [refreshGoogleStatus, refreshWorkspaceSnapshot]);
+  }, [prepareBriefing, refreshGoogleStatus, refreshWorkspaceSnapshot]);
 
   const refreshAgentThread = useCallback(async (threadId: string) => {
     setAgentThreadLoading(true);
@@ -995,6 +1117,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
     void (async () => {
       void refreshAgentTrustLevel();
       void loadProfile();
+      void loadSlackStatus();
       void refreshMemory();
       void refreshActivity();
       void refreshThreads();
@@ -1005,10 +1128,14 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
       if (status?.connected) {
         await refreshWorkspaceSnapshot();
+        void prepareBriefing();
       } else {
         setUpcomingEvents([]);
         setRecentInboxMessages([]);
         setRecentDrafts([]);
+        setPreparedBriefingSummary(null);
+        setPreparedBriefingDateKey(null);
+        setPreparedBriefingConsumed(false);
         setWorkspaceError(null);
         setWorkspaceRefreshedAt(null);
       }
@@ -1021,11 +1148,13 @@ export function DashboardClient({ user }: DashboardClientProps) {
     };
   }, [
     loadProfile,
+    loadSlackStatus,
     refreshActivity,
     refreshAgentPendingApproval,
     refreshAgentTrustLevel,
     refreshGoogleStatus,
     refreshMemory,
+    prepareBriefing,
     refreshThreads,
     refreshWorkspaceSnapshot,
   ]);
@@ -1218,6 +1347,24 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
   async function handleRequestBriefing() {
     if (isBriefingLoading || isSubmittingRun) {
+      return;
+    }
+
+    const cachedSummary = preparedBriefingSummary?.trim() ?? "";
+    if (cachedSummary.length > 0 && !preparedBriefingConsumed) {
+      setRunError(null);
+      setRunResult(null);
+      setAgentApprovalError(null);
+      setAgentApprovalResult(null);
+      setStreamingAssistantText("");
+      setAgentMessages((previous) => [
+        ...previous,
+        createLocalMessage({
+          role: "assistant",
+          text: cachedSummary,
+        }),
+      ]);
+      setPreparedBriefingConsumed(true);
       return;
     }
 
@@ -1589,6 +1736,34 @@ export function DashboardClient({ user }: DashboardClientProps) {
     }
   }
 
+  async function handleSaveSlackToken() {
+    setSlackSaving(true);
+    setSlackError(null);
+    setSlackSaved(false);
+
+    try {
+      const response = await fetch("/api/user/settings/slack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: slackToken }),
+      });
+
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string };
+
+      if (!response.ok) {
+        throw new Error(body?.error || "Failed to save Slack token.");
+      }
+
+      setSlackSaved(true);
+      setSlackHasToken(Boolean(slackToken.trim()));
+      setSlackToken("");
+    } catch (e) {
+      setSlackError(e instanceof Error ? e.message : "Could not save Slack token");
+    } finally {
+      setSlackSaving(false);
+    }
+  }
+
   function handleStartNewConversation() {
     setAgentThreadId(null);
     setAgentMessages([]);
@@ -1840,6 +2015,39 @@ export function DashboardClient({ user }: DashboardClientProps) {
         </section>
 
         <section className={styles.panel}>
+          <h2 className={styles.panelTitle}>Integrations</h2>
+          <label className={styles.label}>
+            Slack User Token (xoxp-...)
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <input
+                className={styles.input}
+                type="password"
+                value={slackToken}
+                onChange={(e) => {
+                  setSlackToken(e.target.value);
+                  setSlackSaved(false);
+                }}
+                placeholder={slackChecking ? "Checking..." : slackHasToken ? "•••••••••••••••• (Connected)" : "Connect your Slack workspace"}
+              />
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => void handleSaveSlackToken()}
+                disabled={slackSaving}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                {slackSaving ? "Saving..." : slackHasToken && !slackToken.trim() ? "Disconnect" : "Save"}
+              </button>
+            </div>
+          </label>
+          <p className={styles.meta}>
+            Get a User Token from https://api.slack.com/apps. Required scopes: <code>channels:history</code>, <code>channels:read</code>, <code>groups:history</code>, <code>groups:read</code>
+          </p>
+          {slackSaved ? <p className={styles.meta}>Slack connected successfully. Alik can now read channels.</p> : null}
+          {slackError ? <p className={styles.error}>{slackError}</p> : null}
+        </section>
+
+        <section className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2 className={styles.panelTitle}>What Alik remembers about you</h2>
             <button
@@ -1917,9 +2125,9 @@ export function DashboardClient({ user }: DashboardClientProps) {
                     !isLongDescription || isExpanded
                       ? description
                       : truncateWithEllipsis(
-                          description,
-                          CALENDAR_DESCRIPTION_PREVIEW_LIMIT,
-                        );
+                        description,
+                        CALENDAR_DESCRIPTION_PREVIEW_LIMIT,
+                      );
 
                   return (
                     <li key={eventKey} className={styles.pulseItem}>
@@ -2123,6 +2331,11 @@ export function DashboardClient({ user }: DashboardClientProps) {
                 className={styles.secondaryButton}
                 onClick={() => void handleRequestBriefing()}
                 disabled={isBriefingLoading || isSubmittingRun}
+                title={
+                  preparedBriefingSummary && !preparedBriefingConsumed
+                    ? `Instant briefing ready (${preparedBriefingDateKey ?? "today"})`
+                    : undefined
+                }
               >
                 {isBriefingLoading ? "Briefing..." : "What's my day?"}
               </button>

@@ -188,6 +188,69 @@ export async function updateCalendarEventForUser(
   return { eventId, eventLink: updatedLink };
 }
 
+type SearchCalendarEventsParams = {
+  uid: string;
+  origin: string;
+  query?: string;
+  timeMinIso?: string;
+  timeMaxIso?: string;
+  maxResults?: number;
+};
+
+export async function searchCalendarEventsForUser(
+  params: SearchCalendarEventsParams,
+): Promise<UpcomingCalendarEvent[]> {
+  const { uid, origin } = params;
+  const maxResults = Math.min(Math.max(params.maxResults ?? 10, 1), 20);
+
+  // Default time window: now → 30 days out
+  const timeMin = params.timeMinIso ?? new Date().toISOString();
+  const timeMax =
+    params.timeMaxIso ??
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  if (!isIsoDate(timeMin)) {
+    throw new Error("timeMin must be a valid ISO datetime string.");
+  }
+  if (!isIsoDate(timeMax)) {
+    throw new Error("timeMax must be a valid ISO datetime string.");
+  }
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, CALENDAR_READONLY_SCOPE)) {
+    throw new Error(
+      "Missing required Calendar read scope. Reconnect Google Workspace.",
+    );
+  }
+
+  const calendar = google.calendar({ version: "v3", auth: oauthClient });
+  const listResponse = await calendar.events.list({
+    calendarId: "primary",
+    singleEvents: true,
+    orderBy: "startTime",
+    showDeleted: false,
+    timeMin,
+    timeMax,
+    maxResults,
+    // q searches summary, description, location, and attendee names
+    ...(params.query?.trim() ? { q: params.query.trim() } : {}),
+  });
+
+  return (listResponse.data.items ?? []).map((event) => ({
+    id: event.id ?? null,
+    summary: event.summary?.trim() || "(Untitled event)",
+    description: event.description?.trim() || null,
+    startIso: normalizeCalendarDate(event.start?.dateTime ?? event.start?.date),
+    endIso: normalizeCalendarDate(event.end?.dateTime ?? event.end?.date),
+    htmlLink: event.htmlLink ?? null,
+    location: event.location?.trim() || null,
+  }));
+}
+
 export async function listUpcomingCalendarEventsForUser(
   params: ListUpcomingCalendarEventsParams,
 ): Promise<UpcomingCalendarEvent[]> {
