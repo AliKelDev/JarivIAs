@@ -13,7 +13,6 @@ import type {
   AgentRunStreamEvent,
   AgentThreadResponse,
   AgentTrustLevel,
-  AgentTrustLevelResponse,
   AttachedContextItem,
   BriefingPrepareResponse,
   CalendarUpcomingResponse,
@@ -39,6 +38,7 @@ import { ProfilePanel } from "./components/profile-panel";
 import { RecentActivityPanel } from "./components/recent-activity-panel";
 import { SlackIntegrationPanel } from "./components/slack-integration-panel";
 import { WorkspacePulsePanel } from "./components/workspace-pulse-panel";
+import { useAgentTrust } from "./hooks/use-agent-trust";
 import { useThreadHistory } from "./hooks/use-thread-history";
 
 const AGENT_TRUST_LEVEL_OPTIONS: Array<{
@@ -151,19 +151,6 @@ function isSlackSettingsResponse(value: unknown): value is SlackSettingsResponse
     "hasToken" in value &&
     typeof (value as { hasToken?: unknown }).hasToken === "boolean"
   );
-}
-
-function isAgentTrustLevel(value: unknown): value is AgentTrustLevel {
-  return (
-    value === "supervised" || value === "delegated" || value === "autonomous"
-  );
-}
-
-function isAgentTrustLevelResponse(value: unknown): value is AgentTrustLevelResponse {
-  if (!value || typeof value !== "object" || !("trustLevel" in value)) {
-    return false;
-  }
-  return isAgentTrustLevel((value as AgentTrustLevelResponse).trustLevel);
 }
 
 function readErrorMessage(value: unknown, fallback: string): string {
@@ -320,15 +307,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [agentApprovalSubmitting, setAgentApprovalSubmitting] = useState(false);
   const [agentApprovalError, setAgentApprovalError] = useState<string | null>(null);
   const [agentApprovalResult, setAgentApprovalResult] = useState<ToolResult>(null);
-  const [agentTrustLevel, setAgentTrustLevel] =
-    useState<AgentTrustLevel>("supervised");
-  const [agentTrustLevelSource, setAgentTrustLevelSource] = useState<string | null>(
-    null,
-  );
-  const [agentTrustLoading, setAgentTrustLoading] = useState(true);
-  const [agentTrustSubmitting, setAgentTrustSubmitting] = useState(false);
-  const [agentTrustError, setAgentTrustError] = useState<string | null>(null);
-  const [agentTrustMessage, setAgentTrustMessage] = useState<string | null>(null);
 
   const [integrationLoading, setIntegrationLoading] = useState(true);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
@@ -429,6 +407,17 @@ export function DashboardClient({ user }: DashboardClientProps) {
     return searchParams.get("oauth_error");
   }, [searchParams]);
 
+  const {
+    agentTrustLevel,
+    agentTrustLevelSource,
+    agentTrustLoading,
+    agentTrustSubmitting,
+    agentTrustError,
+    agentTrustMessage,
+    refreshAgentTrustLevel,
+    setTrustLevel,
+  } = useAgentTrust({ formatTrustLevelLabel });
+
   const refreshGoogleStatus = useCallback(
     async (): Promise<GoogleIntegrationStatus | null> => {
       setIntegrationLoading(true);
@@ -468,40 +457,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
     },
     [],
   );
-
-  const refreshAgentTrustLevel = useCallback(async () => {
-    setAgentTrustLoading(true);
-    setAgentTrustError(null);
-
-    try {
-      const response = await fetch("/api/agent/trust-level", {
-        cache: "no-store",
-      });
-      const body = (await response.json().catch(() => null)) as
-        | AgentTrustLevelResponse
-        | { error?: string; source?: string }
-        | null;
-
-      if (!response.ok || !isAgentTrustLevelResponse(body)) {
-        throw new Error(
-          readErrorMessage(body, "Failed to load agent trust level."),
-        );
-      }
-
-      setAgentTrustLevel(body.trustLevel);
-      setAgentTrustLevelSource(
-        typeof body.source === "string" ? body.source : null,
-      );
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load trust settings.";
-      setAgentTrustError(message);
-    } finally {
-      setAgentTrustLoading(false);
-    }
-  }, []);
 
   const refreshWorkspaceSnapshot = useCallback(async () => {
     setWorkspaceLoading(true);
@@ -910,49 +865,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
       setAgentApprovalError(message);
     }
   }, [refreshAgentThread]);
-
-  async function handleSetAgentTrustLevel(nextTrustLevel: AgentTrustLevel) {
-    if (agentTrustSubmitting || nextTrustLevel === agentTrustLevel) {
-      return;
-    }
-
-    setAgentTrustSubmitting(true);
-    setAgentTrustError(null);
-    setAgentTrustMessage(null);
-
-    try {
-      const response = await fetch("/api/agent/trust-level", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trustLevel: nextTrustLevel }),
-      });
-
-      const body = (await response.json().catch(() => null)) as
-        | AgentTrustLevelResponse
-        | { error?: string }
-        | null;
-
-      if (!response.ok || !isAgentTrustLevelResponse(body)) {
-        throw new Error(
-          readErrorMessage(body, "Failed to update trust level."),
-        );
-      }
-
-      setAgentTrustLevel(body.trustLevel);
-      setAgentTrustLevelSource("settings");
-      setAgentTrustMessage(
-        `Autonomy mode set to ${formatTrustLevelLabel(body.trustLevel)}.`,
-      );
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to update trust level.";
-      setAgentTrustError(message);
-    } finally {
-      setAgentTrustSubmitting(false);
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1858,7 +1770,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
                     className={`${styles.trustLevelButton} ${isActive ? styles.trustLevelButtonActive : ""
                       }`}
                     disabled={agentTrustSubmitting || agentTrustLoading}
-                    onClick={() => void handleSetAgentTrustLevel(option.value)}
+                    onClick={() => void setTrustLevel(option.value)}
                   >
                     <span className={styles.trustLevelLabel}>{option.label}</span>
                     <span className={styles.trustLevelSummary}>{option.summary}</span>
