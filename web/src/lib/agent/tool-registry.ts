@@ -13,6 +13,7 @@ import {
   isValidEmailAddress,
   readGmailThreadForUser,
   normalizeEmailAddress,
+  replyToGmailThreadForUser,
   sendGmailMessageForUser,
 } from "@/lib/tools/gmail";
 import { addMemoryEntry, searchMemoryEntries } from "@/lib/memory";
@@ -826,12 +827,92 @@ const slackReadTool: AgentToolDefinition = {
   },
 };
 
+const gmailReplyParametersJsonSchema = {
+  type: "object",
+  properties: {
+    threadId: {
+      type: "string",
+      description: "The Gmail thread ID to reply to. Use gmail_thread_read first to get this.",
+    },
+    to: {
+      type: "string",
+      description: "The recipient email address (usually the original sender of the thread).",
+    },
+    bodyText: {
+      type: "string",
+      description: "The plain-text body of the reply.",
+    },
+  },
+  required: ["threadId", "to", "bodyText"],
+  additionalProperties: false,
+};
+
+const gmailReplyTool: AgentToolDefinition = {
+  name: "gmail_reply",
+  description:
+    "Reply to an existing Gmail thread. Sends a reply that appears inline in the same thread. " +
+    "Use gmail_thread_read first to get the threadId and the original sender's address.",
+  sideEffect: true,
+  defaultApproval: "required",
+  parametersJsonSchema: gmailReplyParametersJsonSchema,
+  declaration: {
+    name: "gmail_reply",
+    description:
+      "Send a reply to an existing Gmail thread. The subject is inferred from the thread automatically.",
+    parametersJsonSchema: gmailReplyParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const threadIdResult = readRequiredStringArg(args, "threadId");
+    if (!threadIdResult.ok) {
+      return threadIdResult;
+    }
+    const toResult = readRequiredStringArg(args, "to");
+    if (!toResult.ok) {
+      return toResult;
+    }
+    const bodyResult = readRequiredStringArg(args, "bodyText");
+    if (!bodyResult.ok) {
+      return bodyResult;
+    }
+
+    const to = normalizeEmailAddress(toResult.value);
+    if (!isValidEmailAddress(to)) {
+      return { ok: false, error: "to must be a valid email address." };
+    }
+
+    return {
+      ok: true,
+      value: {
+        threadId: threadIdResult.value,
+        to,
+        bodyText: bodyResult.value,
+      },
+    };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    const to = typeof args.to === "string" ? args.to : "(missing)";
+    const threadId = typeof args.threadId === "string" ? args.threadId : "(missing)";
+    return `Reply to thread ${threadId} → ${to}.`;
+  },
+  async execute(ctx, args) {
+    const result = await replyToGmailThreadForUser({
+      uid: ctx.uid,
+      origin: ctx.origin,
+      threadId: args.threadId as string,
+      to: args.to as string,
+      bodyText: args.bodyText as string,
+    });
+    return { messageId: result.messageId, threadId: result.threadId };
+  },
+};
+
 const agentTools: AgentToolDefinition[] = [
   searchMemoryTool,
   saveMemoryTool,
   gmailDraftCreateTool,
   gmailThreadReadTool,
   gmailSendTool,
+  gmailReplyTool,
   calendarSearchTool,
   calendarCreateTool,
   calendarUpdateTool,

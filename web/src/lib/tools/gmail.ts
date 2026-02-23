@@ -479,6 +479,113 @@ export async function listGmailDraftsForUser(
   return drafts.filter((draft): draft is RecentGmailDraftItem => Boolean(draft));
 }
 
+type ReplyToGmailThreadParams = {
+  uid: string;
+  origin: string;
+  threadId: string;
+  to: string;
+  bodyText: string;
+};
+
+export async function replyToGmailThreadForUser(
+  params: ReplyToGmailThreadParams,
+): Promise<{ messageId: string | null; threadId: string | null }> {
+  const { uid, origin, threadId, to, bodyText } = params;
+  const normalizedTo = normalizeEmailAddress(to);
+  const normalizedThreadId = threadId.trim();
+
+  if (!normalizedThreadId) {
+    throw new Error("threadId is required to reply to a thread.");
+  }
+  if (!isValidEmailAddress(normalizedTo)) {
+    throw new Error(`Invalid reply-to address: ${normalizedTo}`);
+  }
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_SEND_SCOPE)) {
+    throw new Error("Missing required Gmail scope. Reconnect Google Workspace.");
+  }
+  if (!hasScope(integration, GMAIL_READONLY_SCOPE)) {
+    throw new Error("Missing required Gmail read scope. Reconnect Google Workspace.");
+  }
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+
+  // Fetch the thread to build proper reply headers
+  let originalSubject = "(No subject)";
+  let lastMessageId: string | null = null;
+  const allMessageIds: string[] = [];
+
+  try {
+    const threadResponse = await gmail.users.threads.get({
+      userId: "me",
+      id: normalizedThreadId,
+      format: "metadata",
+      metadataHeaders: ["Subject", "Message-ID"],
+    });
+
+    const messages = threadResponse.data.messages ?? [];
+    for (const message of messages) {
+      const msgId = readGmailHeader(message.payload?.headers, "Message-ID");
+      if (msgId) {
+        allMessageIds.push(msgId);
+        lastMessageId = msgId;
+      }
+    }
+
+    const firstMessage = messages[0];
+    const subject = readGmailHeader(firstMessage?.payload?.headers, "Subject") ?? "";
+    if (subject) {
+      originalSubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+    }
+  } catch {
+    // Non-fatal — fall back to minimal headers, Gmail will still thread correctly via threadId
+    originalSubject = "Re: (unknown)";
+  }
+
+  const headerLines = [
+    `To: ${normalizedTo}`,
+    `Subject: ${originalSubject}`,
+    "Content-Type: text/plain; charset=UTF-8",
+  ];
+  if (lastMessageId) {
+    headerLines.push(`In-Reply-To: ${lastMessageId}`);
+  }
+  if (allMessageIds.length > 0) {
+    headerLines.push(`References: ${allMessageIds.join(" ")}`);
+  }
+
+  const rawMessage = [...headerLines, "", bodyText].join("\r\n");
+
+  const sendResponse = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: encodeBase64Url(rawMessage),
+      threadId: normalizedThreadId,
+    },
+  });
+
+  const sentMessageId = sendResponse.data.id ?? null;
+  const sentThreadId = sendResponse.data.threadId ?? null;
+
+  await getFirebaseAdminDb().collection("audit").add({
+    uid,
+    type: "gmail_reply",
+    status: "completed",
+    to: normalizedTo,
+    subject: originalSubject,
+    threadId: normalizedThreadId,
+    messageId: sentMessageId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { messageId: sentMessageId, threadId: sentThreadId };
+}
+
 export async function sendGmailDraftForUser(params: SendGmailDraftParams) {
   const { uid, origin, draftId, auditType, auditMeta } = params;
 
