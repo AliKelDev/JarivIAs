@@ -1350,24 +1350,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
       return;
     }
 
-    const cachedSummary = preparedBriefingSummary?.trim() ?? "";
-    if (cachedSummary.length > 0 && !preparedBriefingConsumed) {
-      setRunError(null);
-      setRunResult(null);
-      setAgentApprovalError(null);
-      setAgentApprovalResult(null);
-      setStreamingAssistantText("");
-      setAgentMessages((previous) => [
-        ...previous,
-        createLocalMessage({
-          role: "assistant",
-          text: cachedSummary,
-        }),
-      ]);
-      setPreparedBriefingConsumed(true);
-      return;
-    }
-
     setIsBriefingLoading(true);
     setRunError(null);
     setRunResult(null);
@@ -1464,6 +1446,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
     } finally {
       setStreamingAssistantText("");
       setIsBriefingLoading(false);
+      setPreparedBriefingConsumed(true);
     }
   }
 
