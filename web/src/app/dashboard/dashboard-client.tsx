@@ -2326,19 +2326,24 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   Refresh thread
                 </button>
               ) : null}
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => void handleRequestBriefing()}
-                disabled={isBriefingLoading || isSubmittingRun}
-                title={
-                  preparedBriefingSummary && !preparedBriefingConsumed
-                    ? `Instant briefing ready (${preparedBriefingDateKey ?? "today"})`
-                    : undefined
-                }
-              >
-                {isBriefingLoading ? "Briefing..." : "What's my day?"}
-              </button>
+              <span style={{ position: "relative", display: "inline-block" }}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => void handleRequestBriefing()}
+                  disabled={isBriefingLoading || isSubmittingRun}
+                  title={
+                    preparedBriefingSummary && !preparedBriefingConsumed
+                      ? `Instant briefing ready (${preparedBriefingDateKey ?? "today"})`
+                      : undefined
+                  }
+                >
+                  {isBriefingLoading ? "Briefing..." : "What's my day?"}
+                </button>
+                {preparedBriefingSummary && !preparedBriefingConsumed && (
+                  <span className={styles.briefingReadyDot} aria-hidden="true" />
+                )}
+              </span>
               <button
                 type="button"
                 className={styles.secondaryButton}

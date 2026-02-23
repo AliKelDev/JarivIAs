@@ -431,6 +431,23 @@
   box-shadow: 0 7px 16px rgba(20, 45, 67, 0.13);
 }
 
+.briefingReadyDot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid #f2f9f7;
+  animation: briefingPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes briefingPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.25); }
+}
+
 .runButton:disabled,
 .secondaryButton:disabled,
 .dangerButton:disabled {

@@ -631,7 +631,7 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         };
       }
 
-      const toolArgs = validatedArgs.value;
+      const toolArgs: AgentToolArgs = JSON.parse(JSON.stringify(validatedArgs.value));
       const policy = await evaluateAgentToolPolicy({
         uid: request.uid,
         tool,
