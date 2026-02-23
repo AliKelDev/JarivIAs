@@ -100,6 +100,7 @@ type AgentThreadResponse = {
 type AgentRunStreamEvent =
   | { type: "status"; status: string; threadId: string }
   | { type: "delta"; delta: string }
+  | { type: "tool_call"; toolName: string; preview: string }
   | { type: "result"; result: RunResponse }
   | { type: "error"; error: string };
 
@@ -272,6 +273,7 @@ function isAgentRunStreamEvent(value: unknown): value is AgentRunStreamEvent {
   return (
     event.type === "status" ||
     event.type === "delta" ||
+    event.type === "tool_call" ||
     event.type === "result" ||
     event.type === "error"
   );
@@ -477,6 +479,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [agentThreadLoading, setAgentThreadLoading] = useState(false);
   const [streamingAssistantText, setStreamingAssistantText] = useState("");
   const [isSubmittingRun, setIsSubmittingRun] = useState(false);
+  const [thinkingSteps, setThinkingSteps] = useState<{ toolName: string; preview: string }[]>([]);
   const [runResult, setRunResult] = useState<RunResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [agentPendingApproval, setAgentPendingApproval] =
@@ -525,6 +528,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<string | null>(null);
   const [briefingDismissed, setBriefingDismissed] = useState(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
+  const latestThreadRequestIdRef = useRef(0);
 
   const [activityRuns, setActivityRuns] = useState<ActivityRun[]>([]);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -535,6 +539,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [threadsError, setThreadsError] = useState<string | null>(null);
   const [threadsHasMore, setThreadsHasMore] = useState(false);
   const [threadsCursor, setThreadsCursor] = useState<string | null>(null);
+  const [agentThreadOpeningId, setAgentThreadOpeningId] = useState<string | null>(null);
 
   const [profileDisplayName, setProfileDisplayName] = useState("");
   const [profileRole, setProfileRole] = useState("");
@@ -970,12 +975,21 @@ export function DashboardClient({ user }: DashboardClientProps) {
   }, [prepareBriefing, refreshGoogleStatus, refreshWorkspaceSnapshot]);
 
   const refreshAgentThread = useCallback(async (threadId: string) => {
+    const normalizedThreadId = threadId.trim();
+    if (!normalizedThreadId) {
+      return;
+    }
+
+    const requestId = latestThreadRequestIdRef.current + 1;
+    latestThreadRequestIdRef.current = requestId;
+
     setAgentThreadLoading(true);
+    setAgentThreadOpeningId(normalizedThreadId);
     setAgentApprovalError(null);
 
     try {
       const response = await fetch(
-        `/api/agent/thread?threadId=${encodeURIComponent(threadId)}`,
+        `/api/agent/thread?threadId=${encodeURIComponent(normalizedThreadId)}`,
         {
           cache: "no-store",
         },
@@ -991,6 +1005,11 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
       if (!isAgentThreadResponse(body)) {
         throw new Error("Invalid thread response.");
+      }
+
+      // Ignore stale responses if the user switched threads while this request was in flight.
+      if (latestThreadRequestIdRef.current !== requestId) {
+        return;
       }
 
       setAgentThreadId(body.threadId);
@@ -1011,15 +1030,38 @@ export function DashboardClient({ user }: DashboardClientProps) {
         setAgentPendingApproval(null);
       }
     } catch (caughtError) {
+      if (latestThreadRequestIdRef.current !== requestId) {
+        return;
+      }
       const message =
         caughtError instanceof Error
           ? caughtError.message
           : "Failed to load agent thread.";
       setAgentApprovalError(message);
     } finally {
-      setAgentThreadLoading(false);
+      if (latestThreadRequestIdRef.current === requestId) {
+        setAgentThreadLoading(false);
+        setAgentThreadOpeningId(null);
+      }
     }
   }, []);
+
+  const openAgentThread = useCallback(
+    (threadId: string | null | undefined, options?: { scrollToTop?: boolean }) => {
+      const normalizedThreadId = threadId?.trim() ?? "";
+      if (!normalizedThreadId) {
+        return;
+      }
+      if (agentThreadOpeningId === normalizedThreadId) {
+        return;
+      }
+      if (options?.scrollToTop) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      void refreshAgentThread(normalizedThreadId);
+    },
+    [agentThreadOpeningId, refreshAgentThread],
+  );
 
   const refreshAgentPendingApproval = useCallback(async () => {
     setAgentApprovalError(null);
@@ -1055,7 +1097,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
       });
 
       if (first.threadId) {
-        setAgentThreadId(first.threadId);
         await refreshAgentThread(first.threadId);
       }
     } catch (caughtError) {
@@ -1642,7 +1683,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
   }
 
   function handleStartNewConversation() {
+    latestThreadRequestIdRef.current += 1;
     setAgentThreadId(null);
+    setAgentThreadLoading(false);
+    setAgentThreadOpeningId(null);
     setAgentMessages([]);
     setStreamingAssistantText("");
     setAgentPendingApproval(null);
@@ -2254,9 +2298,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={() => void refreshAgentThread(agentThreadId)}
+                  onClick={() => openAgentThread(agentThreadId)}
+                  disabled={agentThreadOpeningId === agentThreadId}
                 >
-                  Refresh thread
+                  {agentThreadOpeningId === agentThreadId ? "Refreshing..." : "Refresh thread"}
                 </button>
               ) : null}
               <button
@@ -2464,11 +2509,15 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   type="button"
                   className={`${styles.inlineTextButton} ${thread.id === agentThreadId ? styles.activeThreadButton : ""}`}
                   onClick={() => {
-                    void refreshAgentThread(thread.id);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    openAgentThread(thread.id, { scrollToTop: true });
                   }}
+                  disabled={agentThreadOpeningId === thread.id}
                 >
-                  {thread.id === agentThreadId ? "Currently open" : "Open →"}
+                  {agentThreadOpeningId === thread.id
+                    ? "Opening..."
+                    : thread.id === agentThreadId
+                    ? "Currently open"
+                    : "Open →"}
                 </button>
               </li>
             ))}
@@ -2525,11 +2574,11 @@ export function DashboardClient({ user }: DashboardClientProps) {
                     type="button"
                     className={styles.inlineTextButton}
                     onClick={() => {
-                      setAgentThreadId(run.threadId);
-                      void refreshAgentThread(run.threadId!);
+                      openAgentThread(run.threadId, { scrollToTop: true });
                     }}
+                    disabled={agentThreadOpeningId === run.threadId}
                   >
-                    Open thread →
+                    {agentThreadOpeningId === run.threadId ? "Opening..." : "Open thread →"}
                   </button>
                 ) : null}
               </li>

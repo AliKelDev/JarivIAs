@@ -85,6 +85,7 @@ export type AgentRunRequest = {
   conversation?: AgentConversationMessage[];
   attachedContext?: AgentAttachedContextItem[];
   onTextDelta?: (delta: string) => void | Promise<void>;
+  onToolCall?: (toolName: string, preview: string) => void | Promise<void>;
 };
 
 export type AgentRunResponse = {

@@ -802,6 +802,10 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         { merge: true },
       );
 
+      if (request.onToolCall) {
+        await request.onToolCall(tool.name, tool.previewForApproval(toolArgs));
+      }
+
       try {
         const output = await tool.execute(
           {
