@@ -1,312 +1,105 @@
 # Agentic Portal Master Plan
 
-Last updated: 2026-02-17
+Last updated: 2026-02-23
 
 ## 1. Goal
 
-Build a web portal where users sign in with Google and use an AI assistant to perform real actions:
+Build a web portal where authenticated users collaborate with an AI teammate (Alik) that can plan and execute real workflows with auditable guardrails.
 
-- Send or draft emails
-- Create or update calendar events
-- Send messages via a selected messaging connector
+Core outcomes:
+- Actionable assistant chat with tool-calling.
+- Human control over side effects through trust levels + approvals.
+- Persistent context (threads, profile, memory) so the assistant improves over time.
 
-The platform should be hosted on Firebase/GCP and use Gemini for planning and tool-calling.
+## 2. Current Build Snapshot (2026-02-23)
 
-## 1.1 Current Build Snapshot (2026-02-17)
+Shipped:
+- Landing page, login, onboarding, protected dashboard.
+- Google OAuth integration for Gmail + Calendar.
+- Agent runtime using Gemini via `@google/genai`.
+- Multi-step tool-calling loop (default 8 steps, capped at 15).
+- Approval flow for side-effect actions with resume support.
+- Thread persistence + thread history browser.
+- Workspace Pulse panels (upcoming calendar + recent inbox + drafts).
+- Memory panel + profile editing + trust-level controls.
+- Morning briefing stream + on-login prepare cache.
+- Slack read integration through user-provided token settings.
 
-- Live app on Firebase App Hosting with Google auth/session flow.
-- Protected dashboard available at `/dashboard`.
-- Google OAuth connector for Gmail/Calendar is operational.
-- Agent runtime is Gemini-backed (Vertex AI) with registered tool adapters.
-- Working tool actions:
-  - `gmail_send`
-  - `calendar_event_create`
-- Gmail approval gate is implemented with three decisions:
-  - Reject
-  - Approve once
-  - Approve and allow recipient
-- Agent approvals are resumable via API and rendered inline in chat.
-- Dashboard chat persists thread history and streams assistant output.
+## 3. Product Boundaries
 
-## 2. V1 Product Scope
+In scope (current):
+- Single-user authenticated workspace.
+- Gmail/Calendar/Slack read and Gmail + Calendar side-effect actions.
+- Human-in-the-loop for destructive or sensitive actions.
 
-### In scope
+Out of scope (for now):
+- Enterprise multi-tenant admin controls.
+- Fully autonomous background task automation without user-facing traceability.
+- Broad connector marketplace.
 
-- Google login via Firebase Authentication
-- Dashboard with agent chat
-- Tool execution with guardrails
-- Gmail draft/send support
-- Google Calendar create/update support
-- Activity and audit logs
-- Human approval flow for side-effect actions
-
-### Out of scope (V1)
-
-- Multi-tenant enterprise admin suite
-- Large connector catalog
-- Fully autonomous “always-on” actions without approvals
-- Advanced analytics warehouse
-
-## 3. Recommended Architecture
+## 4. Architecture
 
 ```text
 [Browser: Next.js UI]
         |
         v
-[Firebase App Hosting: web/app server]
+[Next.js server routes on Firebase App Hosting]
         |
-        +--> [Firebase Auth: Google sign-in]
-        |
-        +--> [Agent Service]
-               |
-               +--> [Gemini model (Vertex AI or Gemini API)]
-               +--> [Tool Registry + Policy Engine]
-                        |
-                        +--> [Gmail API]
-                        +--> [Calendar API]
-                        +--> [Messaging Connector]
-        |
-        +--> [Firestore: users, threads, runs, actions, audit]
-        +--> [Secret Manager: OAuth secrets/tokens refs]
-        +--> [Cloud Tasks + Scheduler: async and periodic jobs]
+        +--> Firebase Auth session cookies
+        +--> Agent orchestrator (Gemini + tool registry + policy)
+        +--> Gmail / Calendar / Slack APIs
+        +--> Firestore (users, threads, runs, approvals, memory)
 ```
 
-Framework decision note:
-
-- Frontend/runtime stack for V1 is locked to `Next.js + Firebase App Hosting`.
-- See `docs/decision-log.md` for rationale and revisit criteria.
-
-## 4. Identity, Auth, and Permissions
-
-### 4.1 User identity
-
-- Use Firebase Authentication with Google provider for login.
-- Use secure session cookies for server-side requests.
-
-### 4.2 API action permissions
-
-- Use separate OAuth flow for Gmail and Calendar scopes.
-- Request only minimal required scopes.
-- Store refresh/access token metadata securely.
-
-### 4.3 Authorization model
-
-- Roles:
-  - `owner`
-  - `admin`
-  - `member`
-- Policy controls:
-  - Which tools each role can use
-  - Which actions require explicit approval
-  - Daily/weekly action limits
-
-## 5. Agent Runtime Model
-
-### 5.1 Core loop
-
-1. Receive user intent.
-2. Ask Gemini for next action or response.
-3. If tool call is proposed, validate schema.
-4. Apply policy checks (authorization + risk rules).
-5. If approval required, pause with action card.
-6. Execute tool action.
-7. Persist results and continue loop.
-8. Return final response and action summary.
-
-### 5.2 Run lifecycle states
-
-- `queued`
-- `planning`
-- `awaiting_confirmation`
-- `executing`
-- `completed`
-- `failed`
-
-### 5.3 Reliability controls
-
-- Idempotency keys for any side-effect action
-- Retry strategy for transient failures
-- Structured error classes (auth, validation, API, timeout)
-- Full action trace persistence for debugging
-
-## 6. Tooling Strategy
-
-Start with a narrow and safe tool set:
-
-1. `gmail_draft_create`
-2. `gmail_send`
-3. `calendar_event_create`
-4. `calendar_event_update`
-
-Then add one messaging connector after stability targets are met.
-
-Each tool adapter should include:
-
-- Input schema validation
-- Authorization checks
-- Connector execution
-- Normalized result shape
-- Error mapping
-
-## 7. Dashboard UX Plan
-
-### Main pages
-
-- Chat
-- Tasks
-- Integrations
-- Activity
-- Settings
-
-### Critical UI behavior
-
-- Display proposed actions before execution
-- Require explicit confirmation for risky actions
-- Show deterministic result records (success/failure + metadata)
-- Show recent actions and pending approvals in dashboard widgets
-
-## 8. Data Model (Firestore)
-
-### Collections
-
-- `users/{uid}`
-  - Role, profile, preferences
-- `users/{uid}/integrations/{provider}`
-  - Connection state, scopes, token metadata, secret reference
-- `threads/{threadId}`
-  - Ownership, summary, updated timestamps
-- `threads/{threadId}/messages/{messageId}`
-  - Role, content, tool markers
-- `runs/{runId}`
-  - State, timeline, failure details
-- `runs/{runId}/actions/{actionId}`
-  - Tool, params hash, confirmation state, result metadata
-- `audit/{auditId}`
-  - Immutable security and operation audit events
-
-## 9. Security and Compliance Requirements
-
-- Principle of least privilege for OAuth scopes
-- No raw tokens in logs
-- Sensitive values in Secret Manager
-- Encryption at rest and controlled key access
-- Action throttling and abuse protections
-- “Global kill switch” to disable all side-effect tools
-- OAuth app verification prep:
-  - Product home page
-  - Privacy policy
-  - Terms of service
-  - Scope justification and demo evidence
-
-## 10. Deployment and Infrastructure Plan
-
-### Core stack
-
-- Firebase App Hosting for the app
-- Firestore for app state
-- Secret Manager for sensitive config
-- Cloud Tasks for async execution
-- Cloud Scheduler for periodic jobs
-- Cloud Logging/Monitoring for operations
-
-### CI/CD expectations
-
-- PR checks:
-  - Lint
-  - Type check
-  - Unit tests
-  - Integration tests (mocked minimum)
-- Preview deployments for branches
-- Controlled production rollouts
-
-## 11. Phased Delivery Roadmap
-
-### Phase 0: Foundations (2-3 days)
-
-- Initialize repo and app skeleton
-- Configure Firebase App Hosting
-- Implement Google login and sessions
-- Build dashboard shell
-
-### Phase 1: Agent core (4-6 days)
-
-- Gemini-based function calling loop
-- Tool registry and policy engine
-- Persistent run/action state machine
-
-### Phase 2: Gmail + Calendar (4-7 days)
-
-- OAuth connector flows
-- Token lifecycle handling
-- Gmail and Calendar adapters
-
-### Phase 3: Approval + Audit (3-5 days)
-
-- Human-in-the-loop confirmation flow
-- Action cards in UI
-- Full audit stream
-
-### Phase 4: Reliability (3-4 days)
-
-- Queueing and retries
-- Idempotency guarantees
-- Failure recovery paths
-
-### Phase 5: Hardening and Launch (3-5 days)
-
-- Security review
-- OAuth verification readiness
-- Monitoring and alert policies
-- Load/cost checks
-
-### Phase 6: Expansion (ongoing)
-
-- Add connectors
-- Add scheduled automations
-- Add team collaboration features
-
-## 12. Major Risks and Mitigations
-
-### OAuth verification delay
-
-- Mitigation: build with test users while verification is in progress.
-
-### Accidental autonomous side effects
-
-- Mitigation: default to approval-required mode.
-
-### Token/security incidents
-
-- Mitigation: strict secret management + redacted logs + least privilege.
-
-### Cost spikes
-
-- Mitigation: daily quotas, tool-rate limits, billing alerts.
-
-### Tool-call drift
-
-- Mitigation: strict JSON schemas and deterministic validators.
-
-## 13. Success Criteria for V1
-
-- User can sign in with Google and reach dashboard.
-- User can ask agent to draft/send an email with approval gate.
-- User can ask agent to create/update calendar events with approval gate.
-- Every tool action is visible in Activity/Audit log.
-- System retries safely without duplicate side effects.
-- Core uptime and error alerts are configured.
-
-## 14. First Build Order
-
-1. Lock V1 scope to Gmail + Calendar only.
-2. Scaffold Next.js app and Firebase App Hosting.
-3. Implement login and session handling.
-4. Implement one complete end-to-end path:
-   - Prompt -> planned action -> approval -> calendar create -> logged result
-5. Add Gmail flow.
-6. Add queue/retry/idempotency.
-7. Prepare OAuth verification artifacts.
+Key design choices:
+- Keep frontend and server in one Next.js deployment for velocity.
+- Keep tool execution server-side only.
+- Keep policy checks centralized in runtime, not UI.
+
+## 5. Runtime Model
+
+1. Receive prompt (+ optional thread/conversation/attached context).
+2. Build stable system instruction (persona + memory + attached context).
+3. Run Gemini planning/tool-call loop.
+4. Validate tool args and evaluate policy.
+5. Pause for approval when required.
+6. Execute tool, persist action/run history, continue loop.
+7. Persist assistant response and return final status.
+
+## 6. Trust and Safety Model
+
+Trust levels:
+- `supervised`: all side-effect tools require approval.
+- `delegated`: allowlisted Gmail recipients auto-send; other side effects require approval.
+- `autonomous`: side-effect tools allowed by policy.
+
+Global kill switch:
+- `AGENT_SIDE_EFFECTS_ENABLED=false` disables all side-effect tool execution.
+
+## 7. Data Model (Simplified)
+
+- `users/{uid}`: profile + account-level metadata.
+- `users/{uid}/settings/*`: trust policy, Slack token config, etc.
+- `users/{uid}/memory/*`: long-term memory entries.
+- `users/{uid}/agentApprovals/*`: pending/resolved approvals.
+- `threads/{threadId}` + `threads/{threadId}/messages/*`: chat history.
+- `runs/{runId}` + `runs/{runId}/actions/*`: execution trace.
+
+## 8. Near-Term Roadmap
+
+1. Reliability hardening:
+   - idempotency and retry semantics for side-effect tools
+   - richer error telemetry per run step
+2. UX polish:
+   - tighter thread browsing and activity filtering
+   - improved action cards and undo affordances
+3. Connector maturity:
+   - evolve Slack auth from token paste to OAuth when needed
+
+## 9. Operational Rule
+
+`docs/AGENTS.md` is the live coordination board. This file is the strategic baseline and should be updated when architecture or product boundaries change.
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-19
+Date: 2026-02-23

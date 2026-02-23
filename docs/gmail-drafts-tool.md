@@ -1,9 +1,13 @@
 # Gmail Drafts Tool Spec
 
 Author: Claude (Sonnet 4.6)
-Last updated: 2026-02-19
+Last updated: 2026-02-23
 
 Related checklist item: `execution-playbook.md` Phase 2 — `gmail_draft_create`
+
+Implementation status (2026-02-23):
+- Implemented in runtime and tool registry.
+- Dashboard includes recent drafts panel and send-draft action flow.
 
 ---
 

@@ -1,41 +1,49 @@
 # Agentic Portal Docs
 
-This folder captures the long-term plan for building and operating the AI assistant portal.
+This directory contains architecture, operating, and coordination docs for Jariv Agentic Portal.
 
-## Status Snapshot (2026-02-17)
+## Status Snapshot (2026-02-23)
 
-- Core web app is live on Firebase App Hosting with Google login + protected dashboard.
-- Google OAuth connector is wired for Gmail/Calendar actions.
-- Gmail send + Calendar create actions are functional from the dashboard.
-- Agent runtime now uses Gemini with tool-calling via Vertex AI.
-- Threaded chat is live in dashboard with streamed assistant output.
-- Agent approval flow is implemented end-to-end (pending -> resolve -> execute/reject).
-- Repo is pushed to `origin/main` at commit `1f07408`.
+- Stack: `Next.js + Firebase App Hosting + Firestore + Gemini (@google/genai)`.
+- Auth: Google sign-in with Firebase session cookies.
+- Integrations: Gmail + Calendar OAuth, Slack user-token settings.
+- Agent: multi-step Gemini tool-calling loop with streaming and approval gates.
+- Tools live: `gmail_draft_create`, `gmail_send`, `gmail_thread_read`, `calendar_event_create`, `calendar_event_update`, `calendar_search`, `save_memory`, `search_memory`, `slack_channels`, `slack_read`.
+- UX live: onboarding flow, thread history browser, activity panel, memory panel, workspace pulse, cached morning briefing warmup.
 
-## Files
+## Read This First (New Teammates)
 
-- `docs/agentic-portal-master-plan.md`
-  - Product scope, architecture, security model, data model, roadmap, risks.
-- `docs/execution-playbook.md`
-  - Step-by-step implementation checklist, command checklist, release checklist, and operating cadence.
-- `docs/gemini-integration-roadmap.md`
-  - Gemini-specific architecture decisions and phased integration plan for this codebase.
-- `docs/gemini-agent-runtime-spec.md`
-  - Detailed runtime contract for function calling, tool dispatch, approvals, and run persistence.
-- `docs/gemini-execution-checklist.md`
-  - Concrete implementation checklist and CLI runbook for enabling Gemini in production safely.
-- `docs/bootstrap-status-2026-02-16.md`
-  - Concrete bootstrap status for the current cloud project, deployed backend, and next implementation steps.
-- `docs/decision-log.md`
-  - Architecture decisions and rationale (including framework/hosting choices).
+1. `docs/AGENTS.md`
+2. `docs/new-contributor-quickstart.md`
+3. `docs/execution-playbook.md`
+4. `docs/decision-log.md`
 
-## How to Use These Docs
+## Doc Map
 
-1. Start with `docs/agentic-portal-master-plan.md` to align on architecture and guardrails.
-2. Execute work from `docs/execution-playbook.md` phase by phase.
-3. Update checkboxes and notes after each completed task.
-4. Revisit risks and scope before adding new connectors or automation.
+- `docs/new-contributor-quickstart.md` (current)
+  - Environment setup, local run, smoke tests, key file map.
+- `docs/execution-playbook.md` (current)
+  - Day-to-day implementation/deploy/release runbook.
+- `docs/agentic-portal-master-plan.md` (current)
+  - Product/architecture north star and phased direction.
+- `docs/gemini-agent-runtime-spec.md` (current)
+  - Source-of-truth runtime contract for `/api/agent/run*`.
+- `docs/memory-and-user-profile.md` (current)
+  - Actual memory model and prompt-injection behavior.
+- `docs/trust-and-autonomy-ux.md` (current)
+  - Trust philosophy and UX progression.
+- `docs/gmail-drafts-tool.md` (current)
+  - Draft-first email behavior and tool semantics.
+- `docs/decision-log.md` (current)
+  - Major technical decisions and revisit triggers.
+- `docs/gemini-integration-roadmap.md` (historical + refreshed status)
+- `docs/gemini-execution-checklist.md` (historical + refreshed checklist)
+- `docs/bootstrap-status-2026-02-16.md` (historical snapshot)
+
+## Working Rule
+
+If this folder and code disagree, trust code first, then `docs/AGENTS.md`, then update docs in the same change.
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-19
+Date: 2026-02-23

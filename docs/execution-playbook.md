@@ -1,240 +1,120 @@
 # Execution Playbook
 
-Last updated: 2026-02-17
+Last updated: 2026-02-23
 
-This file is the operational checklist for building the agentic portal from scratch to launch.
+This is the current operator runbook for implementing, validating, and shipping work.
 
 ## 1. Working Rules
 
-- Keep scope locked to V1 until launch criteria are met.
-- Every side-effect action must be auditable.
-- Default to “approval required” for email sends and event updates.
-- No production secrets in source control.
+- Check `docs/AGENTS.md` before claiming work.
+- Avoid parallel edits in the same files unless coordinated.
+- Preserve approval gates for side-effect tools.
+- Keep secrets out of source control.
+- If behavior changes, update docs in the same PR/commit.
 
-## 2. Pre-Flight Checklist
+## 2. Daily Developer Loop
 
-- [x] Confirm Firebase project exists and billing is enabled (Blaze).
-- [x] Confirm GCP project is selected in `gcloud`.
-- [x] Confirm `firebase`, `gcloud`, and Node toolchain versions are compatible.
-- [ ] Confirm domain plan (dev + prod).
-- [ ] Confirm OAuth consent screen owner and support email.
-
-## 3. Phase-by-Phase Build Checklist
-
-## Phase 0: Foundations
-
-- [x] Initialize app project (Next.js recommended).
-- [x] Initialize Firebase in repo.
-- [x] Initialize App Hosting.
-- [ ] Connect GitHub repo to App Hosting backend.
-- [x] Add Firebase Auth Google sign-in.
-- [x] Implement server session cookie flow.
-- [x] Build dashboard shell (current V1 surface in `/dashboard`).
-
-Definition of done:
-
-- [x] User can log in with Google and load authenticated dashboard.
-
-## Phase 1: Agent Core
-
-- [x] Implement server-side agent endpoint.
-- [x] Add Gemini model wrapper with function calling.
-- [x] Build tool registry interface.
-- [ ] Add policy engine (role + approval + quotas).
-- [x] Add run state machine persistence.
-- [x] Add basic conversation/thread persistence.
-
-Definition of done:
-
-- [x] Prompt can create a planned tool action with persisted run state.
-
-## Phase 2: Gmail + Calendar Connectors
-
-- [x] Implement OAuth connect flow for Gmail + Calendar.
-- [ ] Implement encrypted token storage strategy.
-- [x] Add token refresh logic and revocation handling.
-- [ ] Build `gmail_draft_create`.
-- [x] Build `gmail_send`.
-- [x] Build `calendar_event_create`.
-- [ ] Build `calendar_event_update`.
-- [ ] Add connector health checks and error mapping.
-
-Definition of done:
-
-- [x] Portal can complete one Gmail action and one Calendar action end-to-end.
-
-## Phase 3: Approval + Audit
-
-- [x] Build UI action confirmation cards (manual + agent flow).
-- [x] Pause runs in `awaiting_confirmation`.
-- [x] Resume runs after user approval.
-- [x] Add immutable audit event writes (append-only baseline in `audit` collection).
-- [ ] Expose Activity view with filters.
-
-Definition of done:
-
-- [ ] All side-effect actions require approval and produce audit events.
-
-## Phase 4: Reliability
-
-- [ ] Move tool execution to async queue where needed.
-- [ ] Add idempotency keys for side-effect actions.
-- [ ] Add retry policy for transient API errors.
-- [ ] Add dead-letter or failure inspection path.
-- [ ] Add timeout and circuit-breaker policies.
-
-Definition of done:
-
-- [ ] Retries do not produce duplicate external side effects.
-
-## Phase 5: Hardening + Launch
-
-- [ ] Security review of scopes, logs, and secret handling.
-- [ ] Add monitoring dashboards and alerts.
-- [ ] Add budget and spend alerts.
-- [ ] Complete OAuth verification artifacts.
-- [ ] Load test critical paths.
-- [ ] Run production readiness checklist.
-
-Definition of done:
-
-- [ ] System is ready for controlled production rollout.
-
-## 4. Suggested Command Checklist
-
-Use these as templates; adapt names/regions/project IDs.
+1. Sync and inspect current changes:
 
 ```bash
-# Firebase login and project selection
-firebase login
-firebase use <firebase-project-id>
-
-# Initialize features
-firebase init apphosting
-firebase init firestore
-
-# App Hosting backend creation
-firebase apphosting:backends:create --backend <backend-name> --primary-region <region>
-
-# Set App Hosting secrets
-firebase apphosting:secrets:set GEMINI_API_KEY
-firebase apphosting:secrets:set GOOGLE_OAUTH_CLIENT_SECRET
-
-# Rollout from branch
-firebase apphosting:rollouts:create <backend-id> --git-branch main
+git status --short
 ```
+
+2. Run local checks before and after edits:
 
 ```bash
-# GCP service enablement
-gcloud services enable run.googleapis.com secretmanager.googleapis.com cloudscheduler.googleapis.com cloudtasks.googleapis.com aiplatform.googleapis.com
-
-# Secret Manager examples
-printf "value" | gcloud secrets create my-secret --data-file=-
-printf "newvalue" | gcloud secrets versions add my-secret --data-file=-
-
-# Scheduler example (for periodic sync or cleanup)
-gcloud scheduler jobs create http portal-maintenance \
-  --location=<region> \
-  --schedule="0 */6 * * *" \
-  --uri="https://<service-url>/jobs/maintenance" \
-  --http-method=POST \
-  --oidc-service-account-email=<service-account>
+npm --prefix web run lint
+npm --prefix web run build
 ```
 
-## 5. Test Strategy Checklist
+3. Validate a real user flow in the dashboard.
+4. Update `docs/AGENTS.md` with implementation note if working in multi-agent mode.
 
-- [ ] Unit tests for policy engine.
-- [ ] Unit tests for each tool adapter.
-- [ ] Contract tests for tool schema validation.
-- [ ] Integration tests for OAuth callback and token refresh.
-- [ ] Integration tests for Gmail/Calendar sandbox or test accounts.
-- [ ] End-to-end tests for approval workflow.
-- [ ] Regression tests for duplicate-send prevention.
+## 3. Runtime Health Checklist
 
-## 6. Release Checklist
+- [x] Firebase Auth Google login + session cookie flow.
+- [x] Onboarding gating (`/onboarding`) before dashboard access.
+- [x] Gemini run route (`/api/agent/run`) operational.
+- [x] Streaming route (`/api/agent/run/stream`) operational.
+- [x] Approval pause/resume flow operational.
+- [x] Thread history + message retrieval operational.
+- [x] Activity panel query operational.
+- [x] Morning briefing prepare + stream operational.
+- [x] Memory APIs (read/delete) operational.
+- [x] Slack token settings API operational.
 
-- [ ] Migrations and indexes prepared.
-- [ ] Secrets present in target environment.
-- [ ] OAuth redirect URIs match deployed domains.
-- [ ] Alerts and error reporting active.
-- [ ] Rollback plan tested.
-- [ ] Release notes and known limitations documented.
+## 4. Data and Infra Checklist
 
-## 7. Weekly Operating Cadence
+- [x] Firestore rules + indexes tracked in repo.
+- [x] Composite index: `runs(uid, createdAt desc)`.
+- [x] Composite index: `threads(uid, updatedAt desc)`.
+- [x] Vertex AI API enabled.
+- [x] App Hosting runtime service account has `roles/aiplatform.user`.
 
-### Monday planning
+## 5. Required Secrets / Env
 
-- [ ] Choose one phase goal for the week.
-- [ ] Break work into small, testable tasks.
-- [ ] Confirm dependencies and owner.
+Client-facing env (still required at runtime/build):
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
 
-### Daily execution
+Server secrets:
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) only when not using Vertex IAM auth
 
-- [ ] Ship at least one vertical slice or defect fix daily.
-- [ ] Update checklist status in this file.
-- [ ] Record any architectural decisions or scope changes.
+Runtime controls:
+- `GEMINI_MODEL`
+- `AGENT_MAX_LOOP_STEPS`
+- `AGENT_SIDE_EFFECTS_ENABLED`
 
-### Friday review
+## 6. Pre-Deploy Checklist
 
-- [ ] Demo working flow.
-- [ ] Review risks and incidents.
-- [ ] Re-prioritize next week tasks.
+- [ ] `npm --prefix web run lint` passes.
+- [ ] `npm --prefix web run build` passes.
+- [ ] OAuth redirect URIs include localhost + hosted domain.
+- [ ] App Hosting secrets present.
+- [ ] Firestore indexes deployed.
+- [ ] Manual smoke test covers login, chat, approvals, and one tool action.
 
-## 8. Change Log Template
+## 7. Deploy Commands
 
-Use this section to keep a running record.
+```bash
+# Optional project select
+firebase use jariv-agentic-portal-26-148
 
-```md
-## YYYY-MM-DD
-- Completed:
-- Blockers:
-- Decisions:
-- Next:
+# Indexes (if changed)
+firebase deploy --only firestore:indexes
+
+# App Hosting rollout
+firebase deploy --only apphosting
 ```
 
-## 2026-02-17
+## 8. Production Smoke Test
 
-- Completed:
-  - Gmail approval gate added (request + resolve API + dashboard UI decisions).
-  - Dashboard readability fixes deployed.
-  - Repo committed and pushed to `origin/main`.
-  - Git ignores tightened for local secret/artifact hygiene.
-  - Gemini runtime integrated (`/api/agent/run`) with tool-calling and policy checks.
-  - Agent approval APIs added (`/api/agent/approvals/pending`, `/api/agent/approvals/resolve`).
-  - Threaded chat persistence added (`threads/{threadId}/messages`) and loaded in dashboard.
-  - Streaming endpoint added (`/api/agent/run/stream`) with live token deltas in chat UI.
-  - Pre-planning Firestore path optimized to reduce perceived latency.
-- Blockers:
-  - None for current local flow.
-- Decisions:
-  - Keep `Next.js + Firebase App Hosting` as V1 stack baseline.
-  - Keep `docs/wake-up-story.md` private via git ignore.
-  - Keep long-context thread history strategy (no aggressive short-window truncation).
-- Next:
-  - Add Activity page and deeper observability (latency + token/cost metrics).
+1. Open `/login` and authenticate.
+2. Confirm dashboard loads without auth/session errors.
+3. Send a prompt in chat and verify streaming deltas appear.
+4. Trigger `gmail_send` path; verify pending approval appears.
+5. Resolve approval and verify run completion appears in activity.
+6. Confirm Workspace Pulse loads inbox/calendar data.
+7. Confirm morning briefing endpoint returns cached/ready payload.
 
-## 2026-02-19
+## 9. Incident / Rollback Basics
 
-- Completed:
-  - Added trust-level policy engine for agent side effects (`supervised` / `delegated` / `autonomous`).
-  - Added trust-level storage + read helpers in `users/{uid}/settings/agent_policy`.
-  - Added authenticated trust-level API (`GET/POST /api/agent/trust-level`).
-  - Added dashboard autonomy controls and active trust-level status display.
-  - Updated agent coordination board (`docs/AGENTS.md`) with implementation handoff details.
-  - Implemented bounded multi-step agent planning loop in orchestrator (`AGENT_MAX_LOOP_STEPS`, default 3).
-  - Preserved run-scoped memory/system instruction across loop iterations and fed tool results back into planner context.
-  - Verified loop changes with lint + production build.
-  - Added Firestore composite index for activity queries (`runs`: `uid ASC`, `createdAt DESC`).
-  - Added backend `attachedContext` pipeline for agent runs (request schema, sanitization, run/stream route wiring, orchestrator system-instruction injection).
-  - Added `gmail_thread_read` read-only tool (full thread read via Gmail Threads API) with registry wiring and validation.
-- Blockers:
-  - Concurrent unstaged edits detected in overlapping runtime files from parallel workstream; holding commit until merge context is confirmed.
-- Decisions:
-  - Keep trust level in a dedicated user settings doc for now, with profile fallback support for compatibility.
-- Next:
-  - Merge/commit trust-level + loop changes after reconciling concurrent file edits.
-  - Move to `calendar_event_update`, then `activity view`.
+If critical issues appear after deploy:
+1. Set `AGENT_SIDE_EFFECTS_ENABLED=false` and redeploy to disable side effects.
+2. Keep chat/read-only paths available while investigating.
+3. Redeploy last known-good revision if needed.
+4. Record incident and fix details in `docs/AGENTS.md`.
+
+## 10. Current Open Work Themes
+
+Track live ownership and in-progress tasks in `docs/AGENTS.md`.
+Do not treat this file as a task board.
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-19
+Date: 2026-02-23

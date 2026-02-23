@@ -10,64 +10,125 @@ Use `Next.js` on `Firebase App Hosting` for the portal web app.
 
 ### Why
 
-- Firebase App Hosting has first-class support for Next.js.
-- The product needs server-side capabilities (secure OAuth handling, agent endpoints, tool execution orchestration).
-- Next.js keeps frontend and server logic in one deployable app, reducing operational complexity.
-
-### Rejected Alternative
-
-Use React + Vite as the primary app framework.
-
-### Reason Rejected
-
-- Vite works well for SPA UI, but this project would still require a separate backend service for sensitive server-side operations.
-- That split adds infrastructure and deployment complexity too early for V1.
+- App Hosting has first-class support for Next.js.
+- Product requires secure server-side OAuth and tool execution.
+- One deployable unit keeps V1 operationally simple.
 
 ### Revisit Conditions
 
 Revisit if:
-
-1. Product becomes frontend-only for a major surface.
-2. Team intentionally chooses a split architecture (`SPA + dedicated API platform`) for scaling or org reasons.
+1. Product intentionally moves to split architecture (`SPA + dedicated backend`).
+2. Hosting constraints materially block roadmap execution.
 
 ## 2026-02-17: Approval Policy Baseline for Side Effects
 
 ### Decision
 
-Ship V1 with explicit approval UX for Gmail send and retain a recipient allowlist option (`always allow this recipient`) to reduce repetitive confirmations for trusted contacts.
+Ship V1 with explicit approval UX for side-effect actions and recipient allowlist for repeat Gmail sends.
 
 ### Why
 
-- Prevent accidental high-impact side effects from agent/tool actions.
-- Keep UX practical for repeated manual operations.
-- Establish a policy primitive that can later be reused by the full agent runtime.
+- Prevent accidental high-impact actions.
+- Keep recurring workflows practical.
 
 ### Revisit Conditions
 
-Revisit if:
-
-1. Strong role-based policy engine and audit stream are fully in place.
-2. Additional tools (calendar update, messaging) are routed through centralized policy checks.
+Revisit when richer policy primitives and audit UX are complete.
 
 ## 2026-02-17: Thread-First Agent UX with Streaming
 
 ### Decision
 
-Use a thread-first chat surface as the primary agent interaction model and stream assistant text tokens to the UI via a dedicated streaming route.
+Make threaded chat + token streaming the default interaction model.
 
 ### Why
 
-- The model naturally asks follow-up questions when user intent is underspecified.
-- A chat transcript is the most stable UX for multi-turn planning and approval workflows.
-- Streaming improves perceived latency even when backend orchestration includes storage and policy steps.
+- Multi-turn clarification is natural for agent workflows.
+- Streaming improves perceived responsiveness.
 
 ### Revisit Conditions
 
-Revisit if:
+Revisit if telemetry shows task-first UI clearly outperforms chat.
 
-1. A task-centric UI outperforms chat for the dominant user workflows.
-2. Production telemetry shows streaming overhead or complexity outweighs UX gains.
+## 2026-02-19: Trust Levels as First-Class Policy Input
+
+### Decision
+
+Use per-user trust levels (`supervised`, `delegated`, `autonomous`) as the primary policy mode for side-effect tools.
+
+### Why
+
+- Matches product trust journey.
+- Keeps approval behavior predictable and configurable.
+
+### Revisit Conditions
+
+Revisit if policy needs become domain-specific enough to require fine-grained rule authoring.
+
+## 2026-02-19: Bounded Multi-Step Tool Loop
+
+### Decision
+
+Run agent execution as a bounded multi-step planning loop instead of single-shot tool execution.
+
+### Why
+
+- Enables multi-action completion within one run.
+- Keeps memory/context stable across tool steps.
+
+### Parameters
+
+- `AGENT_MAX_LOOP_STEPS` default `8`, clamp `1..15`.
+
+### Revisit Conditions
+
+Revisit if queue-based execution is introduced for long-running action chains.
+
+## 2026-02-20: Agent-Driven Memory Writes
+
+### Decision
+
+Use explicit `save_memory` tool calls from Alik instead of post-run extraction jobs.
+
+### Why
+
+- Memory writes happen with full conversational context.
+- Lower background complexity and better memory quality.
+
+### Revisit Conditions
+
+Revisit if autonomous memory quality needs post-run dedupe or ranking passes.
+
+## 2026-02-21: On-Login Briefing Preparation
+
+### Decision
+
+Generate/cache daily briefing on dashboard load via `POST /api/agent/briefing/prepare` before introducing scheduler infrastructure.
+
+### Why
+
+- Improves first-click responsiveness.
+- Avoids infra overhead while product is still iterating quickly.
+
+### Revisit Conditions
+
+Revisit when scale/latency requires scheduled precompute.
+
+## 2026-02-23: Slack Token-First Integration
+
+### Decision
+
+Ship Slack read support using user-provided token in settings before Slack OAuth rollout.
+
+### Why
+
+- Faster implementation.
+- Avoids early OAuth app verification overhead.
+
+### Revisit Conditions
+
+Revisit once external user adoption requires managed OAuth onboarding.
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-19
+Date: 2026-02-23
