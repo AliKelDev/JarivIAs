@@ -14,6 +14,7 @@ import {
   readGmailThreadForUser,
   normalizeEmailAddress,
   replyToGmailThreadForUser,
+  searchGmailMessagesForUser,
   sendGmailMessageForUser,
 } from "@/lib/tools/gmail";
 import { addMemoryEntry, searchMemoryEntries } from "@/lib/memory";
@@ -827,6 +828,68 @@ const slackReadTool: AgentToolDefinition = {
   },
 };
 
+const gmailSearchParametersJsonSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: "string",
+      description:
+        "Gmail search query. Supports standard Gmail syntax: from:name, subject:topic, is:unread, etc.",
+    },
+    maxResults: {
+      type: "integer",
+      description: "Max messages to return (1–20, default 10).",
+    },
+  },
+  required: ["query"],
+  additionalProperties: false,
+};
+
+const gmailSearchTool: AgentToolDefinition = {
+  name: "gmail_search",
+  description:
+    "Search Gmail messages by query to find threads and message IDs. " +
+    "Use this before gmail_thread_read or gmail_reply when you don't already have a threadId.",
+  sideEffect: false,
+  defaultApproval: "not_required",
+  parametersJsonSchema: gmailSearchParametersJsonSchema,
+  declaration: {
+    name: "gmail_search",
+    description:
+      "Search the user's Gmail inbox using a query string. Returns matching messages with threadId, sender, subject, and snippet.",
+    parametersJsonSchema: gmailSearchParametersJsonSchema,
+  },
+  validateArgs(args: AgentToolArgs): AgentToolValidationResult {
+    const queryResult = readRequiredStringArg(args, "query");
+    if (!queryResult.ok) {
+      return queryResult;
+    }
+
+    let maxResults = 10;
+    const rawMax = args.maxResults;
+    if (rawMax !== undefined) {
+      if (typeof rawMax !== "number" || !Number.isFinite(rawMax) || !Number.isInteger(rawMax)) {
+        return { ok: false, error: "maxResults must be an integer between 1 and 20." };
+      }
+      maxResults = Math.min(Math.max(rawMax, 1), 20);
+    }
+
+    return { ok: true, value: { query: queryResult.value, maxResults } };
+  },
+  previewForApproval(args: AgentToolArgs): string {
+    return `Search Gmail: "${typeof args.query === "string" ? args.query : ""}"`;
+  },
+  async execute(ctx, args) {
+    const messages = await searchGmailMessagesForUser({
+      uid: ctx.uid,
+      origin: ctx.origin,
+      query: args.query as string,
+      maxResults: typeof args.maxResults === "number" ? args.maxResults : undefined,
+    });
+    return { resultCount: messages.length, messages };
+  },
+};
+
 const gmailReplyParametersJsonSchema = {
   type: "object",
   properties: {
@@ -910,6 +973,7 @@ const agentTools: AgentToolDefinition[] = [
   searchMemoryTool,
   saveMemoryTool,
   gmailDraftCreateTool,
+  gmailSearchTool,
   gmailThreadReadTool,
   gmailSendTool,
   gmailReplyTool,

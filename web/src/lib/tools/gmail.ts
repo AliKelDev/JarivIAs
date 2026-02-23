@@ -479,6 +479,68 @@ export async function listGmailDraftsForUser(
   return drafts.filter((draft): draft is RecentGmailDraftItem => Boolean(draft));
 }
 
+type SearchGmailMessagesParams = {
+  uid: string;
+  origin: string;
+  query: string;
+  maxResults?: number;
+};
+
+export async function searchGmailMessagesForUser(
+  params: SearchGmailMessagesParams,
+): Promise<RecentGmailMessage[]> {
+  const { uid, origin, query } = params;
+  const maxResults = Math.min(Math.max(params.maxResults ?? 10, 1), 20);
+
+  const { oauthClient, integration } = await getGoogleOAuthClientForUser({
+    uid,
+    origin,
+  });
+
+  if (!hasScope(integration, GMAIL_READONLY_SCOPE)) {
+    throw new Error("Missing required Gmail read scope. Reconnect Google Workspace.");
+  }
+
+  const gmail = google.gmail({ version: "v1", auth: oauthClient });
+  const listResponse = await gmail.users.messages.list({
+    userId: "me",
+    q: query,
+    maxResults,
+    includeSpamTrash: false,
+  });
+
+  const messageRefs = listResponse.data.messages ?? [];
+  if (messageRefs.length === 0) {
+    return [];
+  }
+
+  const messages = await Promise.all(
+    messageRefs.map(async (ref) => {
+      if (!ref.id) return null;
+      const details = await gmail.users.messages.get({
+        userId: "me",
+        id: ref.id,
+        format: "metadata",
+        metadataHeaders: ["From", "Subject", "Date"],
+      });
+      const headers = details.data.payload?.headers;
+      const internalDateMs = Number(details.data.internalDate);
+      return {
+        id: details.data.id ?? ref.id,
+        threadId: details.data.threadId ?? null,
+        from: readGmailHeader(headers, "From") ?? "(Unknown sender)",
+        subject: readGmailHeader(headers, "Subject") ?? "(No subject)",
+        snippet: details.data.snippet?.trim() || "",
+        internalDateIso: Number.isFinite(internalDateMs)
+          ? new Date(internalDateMs).toISOString()
+          : null,
+      } satisfies RecentGmailMessage;
+    }),
+  );
+
+  return messages.filter((m): m is RecentGmailMessage => Boolean(m));
+}
+
 type ReplyToGmailThreadParams = {
   uid: string;
   origin: string;
