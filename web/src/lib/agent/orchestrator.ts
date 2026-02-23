@@ -151,12 +151,11 @@ function buildToolExecutionContextMessage(params: {
   const outputJson = stringifyForPlannerContext(output, 2200);
 
   return [
-    `[TOOL_EXECUTION_RESULT]`,
-    `Tool: ${toolName}`,
-    `Args JSON: ${argsJson}`,
-    `Output JSON: ${outputJson}`,
-    `This tool call has already been executed successfully.`,
-    `If the user request is now complete, reply directly to the user.`,
+    `Tool executed: ${toolName}`,
+    `Args: ${argsJson}`,
+    `Result: ${outputJson}`,
+    `This tool call has already completed successfully.`,
+    `If the user request is now satisfied, reply directly to the user.`,
     `If more work is required, call exactly one next tool.`,
   ].join("\n");
 }
