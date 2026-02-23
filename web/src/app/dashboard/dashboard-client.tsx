@@ -33,10 +33,14 @@ import type {
 } from "./types";
 import styles from "./dashboard.module.css";
 import { DashboardHeader } from "./components/dashboard-header";
+import { GoogleWorkspaceIntegrationPanel } from "./components/google-workspace-integration-panel";
+import { MemoryPanel } from "./components/memory-panel";
 import { PastConversationsPanel } from "./components/past-conversations-panel";
+import { ProfilePanel } from "./components/profile-panel";
 import { RecentActivityPanel } from "./components/recent-activity-panel";
+import { SlackIntegrationPanel } from "./components/slack-integration-panel";
+import { WorkspacePulsePanel } from "./components/workspace-pulse-panel";
 
-const CALENDAR_DESCRIPTION_PREVIEW_LIMIT = 320;
 const AGENT_TRUST_LEVEL_OPTIONS: Array<{
   value: AgentTrustLevel;
   label: string;
@@ -1910,434 +1914,138 @@ export function DashboardClient({ user }: DashboardClientProps) {
           </section>
         ) : null}
 
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Google Workspace Integration</h2>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => void handleRefreshWorkspace()}
-              disabled={integrationLoading || workspaceLoading}
-            >
-              {integrationLoading ? "Checking..." : "Refresh workspace"}
-            </button>
-          </div>
-          {integrationLoading ? <p className={styles.meta}>Checking status...</p> : null}
-          {integrationError ? <p className={styles.error}>{integrationError}</p> : null}
-          {!integrationLoading && !integrationError ? (
-            <>
-              <p className={styles.meta}>
-                {integration?.connected
-                  ? `Connected as ${integration.accountEmail || "unknown account"}`
-                  : "Not connected yet."}
-              </p>
-              <div className={styles.buttonRow}>
-                <a
-                  className={styles.linkButton}
-                  href="/api/oauth/google/start?returnTo=/dashboard"
-                >
-                  {integration?.connected ? "Reconnect Google" : "Connect Google"}
-                </a>
-              </div>
-              {integration?.connected && integration.scopes?.length ? (
-                <div className={styles.scopeList}>
-                  {integration.scopes.map((scope) => (
-                    <span key={scope} className={styles.scopeChip}>
-                      {formatScopeLabel(scope)}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              {integration?.connected && !pulseReady ? (
-                <p className={styles.error}>
-                  Reconnect Google to grant `gmail.readonly` and `calendar.readonly`
-                  so Alik can show inbox and calendar context.
-                </p>
-              ) : null}
-            </>
-          ) : null}
-        </section>
+        <GoogleWorkspaceIntegrationPanel
+          integrationLoading={integrationLoading}
+          workspaceLoading={workspaceLoading}
+          integrationError={integrationError}
+          integration={integration}
+          pulseReady={pulseReady}
+          onRefreshWorkspace={() => void handleRefreshWorkspace()}
+          formatScopeLabel={formatScopeLabel}
+        />
 
-        <section className={styles.panel}>
-          <h2 className={styles.panelTitle}>Tell Alik about yourself</h2>
-          {profileLoading ? (
-            <p className={styles.meta}>Loading profile...</p>
-          ) : (
-            <>
-              <label className={styles.label}>
-                Your name
-                <input
-                  className={styles.input}
-                  value={profileDisplayName}
-                  onChange={(e) => { setProfileDisplayName(e.target.value); setProfileSaved(false); }}
-                  placeholder="e.g. Alex"
-                />
-              </label>
-              <div className={styles.toolsGrid}>
-                <label className={styles.label}>
-                  Role
-                  <input
-                    className={styles.input}
-                    value={profileRole}
-                    onChange={(e) => { setProfileRole(e.target.value); setProfileSaved(false); }}
-                    placeholder="e.g. Founder, Student, Engineer"
-                  />
-                </label>
-                <label className={styles.label}>
-                  Organization
-                  <input
-                    className={styles.input}
-                    value={profileOrganization}
-                    onChange={(e) => { setProfileOrganization(e.target.value); setProfileSaved(false); }}
-                    placeholder="e.g. JarivIAs"
-                  />
-                </label>
-              </div>
-              <label className={styles.label}>
-                Timezone
-                <input
-                  className={styles.input}
-                  value={profileTimezone}
-                  onChange={(e) => { setProfileTimezone(e.target.value); setProfileSaved(false); }}
-                  placeholder="e.g. America/Toronto"
-                />
-              </label>
-              <label className={styles.label}>
-                Interests (one per line)
-                <textarea
-                  className={styles.textarea}
-                  value={profileInterests}
-                  onChange={(e) => { setProfileInterests(e.target.value); setProfileSaved(false); }}
-                  placeholder={"AI\nstartups\nmusic"}
-                />
-              </label>
-              <label className={styles.label}>
-                Ongoing projects (one per line)
-                <textarea
-                  className={styles.textarea}
-                  value={profileProjects}
-                  onChange={(e) => { setProfileProjects(e.target.value); setProfileSaved(false); }}
-                  placeholder={"Building JarivIAs, an agentic AI portal"}
-                />
-              </label>
-              <label className={styles.label}>
-                Anything else Alik should know
-                <textarea
-                  className={styles.textarea}
-                  value={profileNotes}
-                  onChange={(e) => { setProfileNotes(e.target.value); setProfileSaved(false); }}
-                  placeholder="e.g. I prefer concise replies, don't schedule things on weekends without asking"
-                />
-              </label>
-              <div className={styles.buttonRow}>
-                <button
-                  type="button"
-                  className={styles.runButton}
-                  onClick={() => void handleSaveProfile()}
-                  disabled={profileSaving}
-                >
-                  {profileSaving ? "Saving..." : "Save profile"}
-                </button>
-              </div>
-              {profileSaved ? (
-                <p className={styles.meta}>Profile saved. Alik will use this from her next run.</p>
-              ) : null}
-              {profileError ? <p className={styles.error}>{profileError}</p> : null}
-            </>
-          )}
-        </section>
+        <ProfilePanel
+          profileLoading={profileLoading}
+          profileDisplayName={profileDisplayName}
+          profileRole={profileRole}
+          profileOrganization={profileOrganization}
+          profileTimezone={profileTimezone}
+          profileInterests={profileInterests}
+          profileProjects={profileProjects}
+          profileNotes={profileNotes}
+          profileSaving={profileSaving}
+          profileSaved={profileSaved}
+          profileError={profileError}
+          onChangeDisplayName={(value) => {
+            setProfileDisplayName(value);
+            setProfileSaved(false);
+          }}
+          onChangeRole={(value) => {
+            setProfileRole(value);
+            setProfileSaved(false);
+          }}
+          onChangeOrganization={(value) => {
+            setProfileOrganization(value);
+            setProfileSaved(false);
+          }}
+          onChangeTimezone={(value) => {
+            setProfileTimezone(value);
+            setProfileSaved(false);
+          }}
+          onChangeInterests={(value) => {
+            setProfileInterests(value);
+            setProfileSaved(false);
+          }}
+          onChangeProjects={(value) => {
+            setProfileProjects(value);
+            setProfileSaved(false);
+          }}
+          onChangeNotes={(value) => {
+            setProfileNotes(value);
+            setProfileSaved(false);
+          }}
+          onSaveProfile={() => void handleSaveProfile()}
+        />
 
-        <section className={styles.panel}>
-          <h2 className={styles.panelTitle}>Integrations</h2>
-          <label className={styles.label}>
-            Slack User Token (xoxp-...)
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <input
-                className={styles.input}
-                type="password"
-                value={slackToken}
-                onChange={(e) => {
-                  setSlackToken(e.target.value);
-                  setSlackSaved(false);
-                }}
-                placeholder={slackChecking ? "Checking..." : slackHasToken ? "•••••••••••••••• (Connected)" : "Connect your Slack workspace"}
-              />
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => void handleSaveSlackToken()}
-                disabled={slackSaving}
-                style={{ whiteSpace: "nowrap" }}
-              >
-                {slackSaving ? "Saving..." : slackHasToken && !slackToken.trim() ? "Disconnect" : "Save"}
-              </button>
-            </div>
-          </label>
-          <p className={styles.meta}>
-            Get a User Token from https://api.slack.com/apps. Required scopes: <code>channels:history</code>, <code>channels:read</code>, <code>groups:history</code>, <code>groups:read</code>
-          </p>
-          {slackSaved ? <p className={styles.meta}>Slack connected successfully. Alik can now read channels.</p> : null}
-          {slackError ? <p className={styles.error}>{slackError}</p> : null}
-        </section>
+        <SlackIntegrationPanel
+          slackToken={slackToken}
+          slackHasToken={slackHasToken}
+          slackChecking={slackChecking}
+          slackSaving={slackSaving}
+          slackSaved={slackSaved}
+          slackError={slackError}
+          onChangeSlackToken={(value) => {
+            setSlackToken(value);
+            setSlackSaved(false);
+          }}
+          onSaveSlackToken={() => void handleSaveSlackToken()}
+        />
 
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>What Alik remembers about you</h2>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => void refreshMemory()}
-              disabled={memoryLoading}
-            >
-              {memoryLoading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-          {memoryError ? <p className={styles.error}>{memoryError}</p> : null}
-          {!memoryLoading && memoryEntries.length === 0 ? (
-            <p className={styles.meta}>
-              Nothing saved yet. Alik will learn from your conversations automatically.
-            </p>
-          ) : null}
-          <ul className={styles.memoryList}>
-            {memoryEntries.map((entry) => (
-              <li key={entry.id} className={styles.memoryEntry}>
-                <p className={styles.memoryContent}>{entry.content}</p>
-                <div className={styles.memoryMeta}>
-                  <span className={styles.memorySource}>{entry.source}</span>
-                  {entry.confidence === "medium" ? (
-                    <span className={styles.memoryConfidence}>medium confidence</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={styles.memoryDeleteButton}
-                    onClick={() => void handleDeleteMemoryEntry(entry.id)}
-                    disabled={memoryDeletingId === entry.id}
-                    aria-label="Forget this"
-                  >
-                    {memoryDeletingId === entry.id ? "Removing..." : "Forget"}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <MemoryPanel
+          memoryLoading={memoryLoading}
+          memoryError={memoryError}
+          memoryEntries={memoryEntries}
+          memoryDeletingId={memoryDeletingId}
+          onRefreshMemory={() => void refreshMemory()}
+          onDeleteMemoryEntry={(id) => void handleDeleteMemoryEntry(id)}
+        />
 
-        <section className={`${styles.panel} ${styles.pulsePanel}`}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Workspace Pulse</h2>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => void handleRefreshWorkspace()}
-              disabled={
-                workspaceLoading || integrationLoading || !integration?.connected
-              }
-            >
-              {workspaceLoading ? "Refreshing..." : "Refresh pulse"}
-            </button>
-          </div>
-          {!integration?.connected ? (
-            <p className={styles.meta}>Connect Google to load your live workspace pulse.</p>
-          ) : null}
-          {workspaceError ? <p className={styles.error}>{workspaceError}</p> : null}
-          <div className={styles.pulseGrid}>
-            <article className={styles.pulseCard}>
-              <h3 className={styles.cardTitle}>Upcoming Calendar</h3>
-              {workspaceLoading ? <p className={styles.meta}>Loading events...</p> : null}
-              {!workspaceLoading && upcomingEvents.length === 0 ? (
-                <p className={styles.meta}>No upcoming events right now.</p>
-              ) : null}
-              <ul className={styles.pulseList}>
-                {upcomingEvents.map((event) => {
-                  const eventKey = buildCalendarEventKey(event);
-                  const description = event.description?.trim() ?? "";
-                  const isLongDescription =
-                    description.length > CALENDAR_DESCRIPTION_PREVIEW_LIMIT;
-                  const isExpanded = Boolean(expandedCalendarDescriptions[eventKey]);
-                  const visibleDescription =
-                    !isLongDescription || isExpanded
-                      ? description
-                      : truncateWithEllipsis(
-                        description,
-                        CALENDAR_DESCRIPTION_PREVIEW_LIMIT,
-                      );
-
-                  return (
-                    <li key={eventKey} className={styles.pulseItem}>
-                      <div className={styles.pulseItemHead}>
-                        <p className={styles.pulseItemTitle}>{event.summary}</p>
-                        <div className={styles.pulseItemActions}>
-                          {event.htmlLink ? (
-                            <a
-                              href={event.htmlLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={styles.inlineLink}
-                            >
-                              Open
-                            </a>
-                          ) : null}
-                          {pinnedContext.some((c) => c.id === (event.id ?? "")) ? (
-                            <button
-                              type="button"
-                              className={styles.pinButtonActive}
-                              onClick={() => setPinnedContext((prev) => prev.filter((c) => c.id !== event.id))}
-                            >
-                              Pinned ✕
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className={styles.pinButton}
-                              onClick={() => setPinnedContext((prev) => [...prev, {
-                                type: "calendar_event",
-                                id: event.id ?? `event-${event.startIso}`,
-                                title: event.summary,
-                                snippet: event.description ?? undefined,
-                                meta: { startIso: event.startIso, endIso: event.endIso, location: event.location },
-                              }])}
-                            >
-                              Pin as context
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <p className={styles.pulseItemMeta}>
-                        {event.startIso ? formatDateTime(event.startIso) : "Time TBD"}
-                        {event.endIso ? ` -> ${formatDateTime(event.endIso)}` : ""}
-                      </p>
-                      {event.location ? (
-                        <p className={styles.pulseItemMeta}>{event.location}</p>
-                      ) : null}
-                      {description ? (
-                        <>
-                          <p className={styles.pulseSnippet}>{visibleDescription}</p>
-                          {isLongDescription ? (
-                            <button
-                              type="button"
-                              className={styles.inlineTextButton}
-                              onClick={() =>
-                                setExpandedCalendarDescriptions((previous) => ({
-                                  ...previous,
-                                  [eventKey]: !previous[eventKey],
-                                }))
-                              }
-                            >
-                              {isExpanded ? "Show less" : "Show more"}
-                            </button>
-                          ) : null}
-                        </>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </article>
-            <article className={styles.pulseCard}>
-              <h3 className={styles.cardTitle}>Latest Inbox</h3>
-              {workspaceLoading ? <p className={styles.meta}>Loading messages...</p> : null}
-              {!workspaceLoading && recentInboxMessages.length === 0 ? (
-                <p className={styles.meta}>No recent inbox messages to show.</p>
-              ) : null}
-              <ul className={styles.pulseList}>
-                {recentInboxMessages.map((message) => (
-                  <li key={message.id} className={styles.pulseItem}>
-                    <div className={styles.pulseItemHead}>
-                      <p className={styles.pulseItemTitle}>{message.subject}</p>
-                      <p className={styles.pulseItemMeta}>
-                        {formatDateTime(message.internalDateIso)}
-                      </p>
-                    </div>
-                    <p className={styles.pulseItemMeta}>{message.from}</p>
-                    {message.snippet ? (
-                      <p className={styles.pulseSnippet}>{message.snippet}</p>
-                    ) : null}
-                    <div className={styles.pulseItemActions}>
-                      <a
-                        href={`https://mail.google.com/mail/u/0/#inbox/${message.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={styles.inlineLink}
-                      >
-                        Open in Gmail
-                      </a>
-                      {pinnedContext.some((c) => c.id === message.id) ? (
-                        <button
-                          type="button"
-                          className={styles.pinButtonActive}
-                          onClick={() => setPinnedContext((prev) => prev.filter((c) => c.id !== message.id))}
-                        >
-                          Pinned ✕
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.pinButton}
-                          onClick={() => setPinnedContext((prev) => [...prev, {
-                            type: "email",
-                            id: message.id,
-                            title: message.subject,
-                            snippet: message.snippet,
-                            meta: { from: message.from },
-                          }])}
-                        >
-                          Pin as context
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </article>
-
-            <article className={styles.pulseCard}>
-              <h3 className={styles.cardTitle}>Recent Drafts</h3>
-              {workspaceLoading ? <p className={styles.meta}>Loading drafts...</p> : null}
-              {!workspaceLoading && recentDrafts.length === 0 ? (
-                <p className={styles.meta}>No recent drafts to show.</p>
-              ) : null}
-              <ul className={styles.pulseList}>
-                {recentDrafts.map((draft) => (
-                  <li key={draft.id} className={styles.pulseItem}>
-                    <div className={styles.pulseItemHead}>
-                      <p className={styles.pulseItemTitle}>{draft.subject}</p>
-                      <p className={styles.pulseItemMeta}>
-                        {formatDateTime(draft.updatedAtIso)}
-                      </p>
-                    </div>
-                    <p className={styles.pulseItemMeta}>{draft.to}</p>
-                    {draft.snippet ? (
-                      <p className={styles.pulseSnippet}>{draft.snippet}</p>
-                    ) : null}
-                    <div className={styles.pulseItemActions}>
-                      <a
-                        href={`https://mail.google.com/mail/u/0/#drafts/${draft.messageId ?? draft.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={styles.inlineLink}
-                      >
-                        Edit in Gmail
-                      </a>
-                      <button
-                        type="button"
-                        className={draftConfirmId === draft.id ? styles.runButton : styles.secondaryButton}
-                        onClick={() => void handleSendDraft(draft.id)}
-                        disabled={draftSendLoadingId === draft.id}
-                      >
-                        {draftSendLoadingId === draft.id ? "Sending..." : draftConfirmId === draft.id ? "Confirm send?" : "Send"}
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          </div>
-          {workspaceRefreshedAt ? (
-            <p className={styles.meta}>
-              Last pulse refresh: {formatDateTime(workspaceRefreshedAt)}
-            </p>
-          ) : null}
-        </section>
+        <WorkspacePulsePanel
+          integrationConnected={Boolean(integration?.connected)}
+          integrationLoading={integrationLoading}
+          workspaceLoading={workspaceLoading}
+          workspaceError={workspaceError}
+          workspaceRefreshedAt={workspaceRefreshedAt}
+          upcomingEvents={upcomingEvents}
+          recentInboxMessages={recentInboxMessages}
+          recentDrafts={recentDrafts}
+          pinnedContext={pinnedContext}
+          expandedCalendarDescriptions={expandedCalendarDescriptions}
+          draftSendLoadingId={draftSendLoadingId}
+          draftConfirmId={draftConfirmId}
+          onRefreshWorkspace={() => void handleRefreshWorkspace()}
+          onToggleCalendarDescription={(eventKey) =>
+            setExpandedCalendarDescriptions((previous) => ({
+              ...previous,
+              [eventKey]: !previous[eventKey],
+            }))
+          }
+          onPinCalendarEvent={(event) =>
+            setPinnedContext((prev) => [
+              ...prev,
+              {
+                type: "calendar_event",
+                id: event.id ?? `event-${event.startIso}`,
+                title: event.summary,
+                snippet: event.description ?? undefined,
+                meta: {
+                  startIso: event.startIso,
+                  endIso: event.endIso,
+                  location: event.location,
+                },
+              },
+            ])
+          }
+          onPinInboxMessage={(message) =>
+            setPinnedContext((prev) => [
+              ...prev,
+              {
+                type: "email",
+                id: message.id,
+                title: message.subject,
+                snippet: message.snippet,
+                meta: { from: message.from },
+              },
+            ])
+          }
+          onUnpinContextById={(id) =>
+            setPinnedContext((prev) => prev.filter((context) => context.id !== id))
+          }
+          onSendDraft={(draftId) => void handleSendDraft(draftId)}
+          formatDateTime={formatDateTime}
+          truncateWithEllipsis={truncateWithEllipsis}
+          buildCalendarEventKey={buildCalendarEventKey}
+        />
 
         <PastConversationsPanel
           threads={threads}
