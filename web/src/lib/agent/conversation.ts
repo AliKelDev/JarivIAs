@@ -28,7 +28,7 @@ function normalizeText(value: unknown, maxLength: number): string | undefined {
 function normalizeAttachedContextType(
   value: unknown,
 ): AgentAttachedContextType | undefined {
-  if (value === "email" || value === "calendar_event") {
+  if (value === "email" || value === "calendar_event" || value === "briefing") {
     return value;
   }
   return undefined;

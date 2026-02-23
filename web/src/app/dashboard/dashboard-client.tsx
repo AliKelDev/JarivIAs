@@ -174,7 +174,7 @@ type SlackSettingsResponse = {
 type AgentTrustLevel = "supervised" | "delegated" | "autonomous";
 
 type AttachedContextItem = {
-  type: "email" | "calendar_event";
+  type: "email" | "calendar_event" | "briefing";
   id: string;
   title?: string;
   snippet?: string;
@@ -520,14 +520,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
   const [pinnedContext, setPinnedContext] = useState<AttachedContextItem[]>([]);
   const [chatExpanded, setChatExpanded] = useState(false);
-  const [isBriefingLoading, setIsBriefingLoading] = useState(false);
-  const [preparedBriefingSummary, setPreparedBriefingSummary] = useState<
-    string | null
-  >(null);
-  const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<
-    string | null
-  >(null);
-  const [preparedBriefingConsumed, setPreparedBriefingConsumed] = useState(false);
+  const [briefingPreparing, setBriefingPreparing] = useState(false);
+  const [preparedBriefingSummary, setPreparedBriefingSummary] = useState<string | null>(null);
+  const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<string | null>(null);
+  const [briefingDismissed, setBriefingDismissed] = useState(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
 
   const [activityRuns, setActivityRuns] = useState<ActivityRun[]>([]);
@@ -850,6 +846,8 @@ export function DashboardClient({ user }: DashboardClientProps) {
   }, []);
 
   const prepareBriefing = useCallback(async () => {
+    setBriefingPreparing(true);
+    setBriefingDismissed(false);
     try {
       const response = await fetch("/api/agent/briefing/prepare", {
         method: "POST",
@@ -871,9 +869,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
       setPreparedBriefingSummary(summary);
       setPreparedBriefingDateKey(body.dateKey);
-      setPreparedBriefingConsumed(false);
     } catch {
-      // Keep this silent; briefing prep is best-effort.
+      // Best-effort.
+    } finally {
+      setBriefingPreparing(false);
     }
   }, []);
 
@@ -964,7 +963,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
     setRecentDrafts([]);
     setPreparedBriefingSummary(null);
     setPreparedBriefingDateKey(null);
-    setPreparedBriefingConsumed(false);
+    setBriefingDismissed(false);
     setExpandedCalendarDescriptions({});
     setWorkspaceError(null);
     setWorkspaceRefreshedAt(null);
@@ -1135,7 +1134,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
         setRecentDrafts([]);
         setPreparedBriefingSummary(null);
         setPreparedBriefingDateKey(null);
-        setPreparedBriefingConsumed(false);
+        setBriefingDismissed(false);
         setWorkspaceError(null);
         setWorkspaceRefreshedAt(null);
       }
@@ -1342,111 +1341,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
     } finally {
       setStreamingAssistantText("");
       setIsSubmittingRun(false);
-    }
-  }
-
-  async function handleRequestBriefing() {
-    if (isBriefingLoading || isSubmittingRun) {
-      return;
-    }
-
-    setIsBriefingLoading(true);
-    setRunError(null);
-    setRunResult(null);
-    setAgentApprovalError(null);
-    setAgentApprovalResult(null);
-    setStreamingAssistantText("");
-
-    try {
-      const response = await fetch("/api/agent/briefing/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: agentThreadId ?? undefined }),
-      });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(body?.error || "Briefing request failed.");
-      }
-
-      if (!response.body) {
-        throw new Error("Briefing stream returned no body.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let runResponse: RunResponse | null = null;
-      let streamedText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        let newlineIndex = buffer.indexOf("\n");
-        while (newlineIndex >= 0) {
-          const line = buffer.slice(0, newlineIndex).trim();
-          buffer = buffer.slice(newlineIndex + 1);
-          newlineIndex = buffer.indexOf("\n");
-          if (!line) {
-            continue;
-          }
-
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(line);
-          } catch {
-            continue;
-          }
-
-          if (!isAgentRunStreamEvent(parsed)) {
-            continue;
-          }
-
-          if (parsed.type === "status" && parsed.threadId) {
-            setAgentThreadId(parsed.threadId);
-          } else if (parsed.type === "delta" && typeof parsed.delta === "string" && parsed.delta.length > 0) {
-            streamedText += parsed.delta;
-            setStreamingAssistantText(streamedText);
-          } else if (parsed.type === "result") {
-            runResponse = parsed.result;
-          } else if (parsed.type === "error") {
-            throw new Error(parsed.error || "Briefing stream failed.");
-          }
-        }
-      }
-
-      if (!runResponse) {
-        throw new Error("Briefing stream ended without a result.");
-      }
-
-      setAgentThreadId(runResponse.threadId);
-
-      const assistantText = streamedText.trim() || runResponse.summary?.trim() || "";
-      if (assistantText.length > 0) {
-        setAgentMessages((previous) => [
-          ...previous,
-          createLocalMessage({
-            role: "assistant",
-            text: assistantText,
-            runId: runResponse!.runId,
-            actionId: runResponse!.actionId,
-          }),
-        ]);
-      }
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error ? caughtError.message : "Briefing failed.";
-      setRunError(message);
-    } finally {
-      setStreamingAssistantText("");
-      setIsBriefingLoading(false);
-      setPreparedBriefingConsumed(true);
     }
   }
 
@@ -1790,6 +1684,62 @@ export function DashboardClient({ user }: DashboardClientProps) {
             Sign out
           </button>
         </header>
+
+        {integration?.connected && (briefingPreparing || (preparedBriefingSummary && !briefingDismissed)) ? (
+          <section className={styles.briefingCard}>
+            <div className={styles.briefingCardHeader}>
+              <span className={styles.briefingCardLabel}>
+                {preparedBriefingDateKey ?? "Today"}
+              </span>
+              {!briefingDismissed && (
+                <button
+                  type="button"
+                  className={styles.briefingDismiss}
+                  onClick={() => setBriefingDismissed(true)}
+                  aria-label="Dismiss briefing"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {briefingPreparing ? (
+              <p className={styles.briefingLoading}>Preparing your briefing…</p>
+            ) : (
+              <>
+                <div className={styles.briefingText}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{preparedBriefingSummary ?? ""}</ReactMarkdown>
+                </div>
+                <div className={styles.briefingActions}>
+                  {pinnedContext.some((c) => c.type === "briefing") ? (
+                    <button
+                      type="button"
+                      className={styles.pinButtonActive}
+                      onClick={() => setPinnedContext((prev) => prev.filter((c) => c.type !== "briefing"))}
+                    >
+                      Pinned to chat ✕
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.pinButton}
+                      onClick={() => setPinnedContext((prev) => [
+                        ...prev.filter((c) => c.type !== "briefing"),
+                        {
+                          type: "briefing",
+                          id: `briefing-${preparedBriefingDateKey ?? "today"}`,
+                          title: `Morning briefing (${preparedBriefingDateKey ?? "today"})`,
+                          snippet: preparedBriefingSummary ?? "",
+                        },
+                      ])}
+                    >
+                      Pin to chat
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        ) : null}
 
         <section className={`${styles.panel} ${styles.heroPanel}`}>
           <p className={styles.heroLead}>
@@ -2309,24 +2259,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   Refresh thread
                 </button>
               ) : null}
-              <span style={{ position: "relative", display: "inline-block" }}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => void handleRequestBriefing()}
-                  disabled={isBriefingLoading || isSubmittingRun}
-                  title={
-                    preparedBriefingSummary && !preparedBriefingConsumed
-                      ? `Instant briefing ready (${preparedBriefingDateKey ?? "today"})`
-                      : undefined
-                  }
-                >
-                  {isBriefingLoading ? "Briefing..." : "What's my day?"}
-                </button>
-                {preparedBriefingSummary && !preparedBriefingConsumed && (
-                  <span className={styles.briefingReadyDot} aria-hidden="true" />
-                )}
-              </span>
               <button
                 type="button"
                 className={styles.secondaryButton}

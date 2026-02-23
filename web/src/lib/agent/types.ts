@@ -24,7 +24,7 @@ export type AgentApprovalDecision =
 export type AgentToolArgs = Record<string, unknown>;
 export type AgentToolResult = Record<string, unknown>;
 
-export type AgentAttachedContextType = "email" | "calendar_event";
+export type AgentAttachedContextType = "email" | "calendar_event" | "briefing";
 
 export type AgentAttachedContextItem = {
   type: AgentAttachedContextType;
