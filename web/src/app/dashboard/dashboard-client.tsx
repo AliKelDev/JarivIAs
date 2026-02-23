@@ -27,7 +27,6 @@ import type {
   RecentInboxDigestItem,
   RunResponse,
   SlackSettingsResponse,
-  ThreadSummary,
   ToolResult,
   UpcomingCalendarDigestItem,
 } from "./types";
@@ -40,6 +39,7 @@ import { ProfilePanel } from "./components/profile-panel";
 import { RecentActivityPanel } from "./components/recent-activity-panel";
 import { SlackIntegrationPanel } from "./components/slack-integration-panel";
 import { WorkspacePulsePanel } from "./components/workspace-pulse-panel";
+import { useThreadHistory } from "./hooks/use-thread-history";
 
 const AGENT_TRUST_LEVEL_OPTIONS: Array<{
   value: AgentTrustLevel;
@@ -366,11 +366,14 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [activityLoading, setActivityLoading] = useState(true);
   const [activityError, setActivityError] = useState<string | null>(null);
 
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [threadsLoading, setThreadsLoading] = useState(true);
-  const [threadsError, setThreadsError] = useState<string | null>(null);
-  const [threadsHasMore, setThreadsHasMore] = useState(false);
-  const [threadsCursor, setThreadsCursor] = useState<string | null>(null);
+  const {
+    threads,
+    threadsLoading,
+    threadsError,
+    threadsHasMore,
+    threadsCursor,
+    refreshThreads,
+  } = useThreadHistory();
   const [agentThreadOpeningId, setAgentThreadOpeningId] = useState<string | null>(null);
 
   const [profileDisplayName, setProfileDisplayName] = useState("");
@@ -752,38 +755,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
       setActivityError(message);
     } finally {
       setActivityLoading(false);
-    }
-  }, []);
-
-  const refreshThreads = useCallback(async (cursor?: string | null) => {
-    if (!cursor) {
-      setThreadsLoading(true);
-      setThreadsError(null);
-    }
-    try {
-      const url = cursor
-        ? `/api/agent/threads?limit=20&cursor=${encodeURIComponent(cursor)}`
-        : "/api/agent/threads?limit=20";
-      const response = await fetch(url, { cache: "no-store" });
-      const body = (await response.json().catch(() => null)) as
-        | { ok: boolean; threads: ThreadSummary[]; hasMore: boolean; nextCursor: string | null }
-        | { error?: string }
-        | null;
-      if (!response.ok) {
-        throw new Error(
-          body && "error" in body ? body.error : "Failed to load threads.",
-        );
-      }
-      const data = body as { ok: boolean; threads: ThreadSummary[]; hasMore: boolean; nextCursor: string | null };
-      setThreads((prev) => cursor ? [...prev, ...data.threads] : data.threads);
-      setThreadsHasMore(data.hasMore);
-      setThreadsCursor(data.nextCursor);
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error ? caughtError.message : "Could not load threads.";
-      setThreadsError(message);
-    } finally {
-      setThreadsLoading(false);
     }
   }, []);
 
