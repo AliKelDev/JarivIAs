@@ -32,10 +32,12 @@ import type {
 import styles from "./dashboard.module.css";
 import { DashboardHeader } from "./components/dashboard-header";
 import { GoogleWorkspaceIntegrationPanel } from "./components/google-workspace-integration-panel";
+import { LeftSidebar } from "./components/left-sidebar";
 import { MemoryPanel } from "./components/memory-panel";
 import { PastConversationsPanel } from "./components/past-conversations-panel";
 import { ProfilePanel } from "./components/profile-panel";
 import { RecentActivityPanel } from "./components/recent-activity-panel";
+import { RightRail } from "./components/right-rail";
 import { SlackIntegrationPanel } from "./components/slack-integration-panel";
 import { WorkspacePulsePanel } from "./components/workspace-pulse-panel";
 import { useAgentTrust } from "./hooks/use-agent-trust";
@@ -1450,647 +1452,685 @@ export function DashboardClient({ user }: DashboardClientProps) {
       <div className={styles.backdropOrbTwo} />
       <div className={styles.container}>
         <DashboardHeader user={user} onSignOut={() => void handleSignOut()} />
+        <div className={styles.layoutShell}>
+          {/* Left column — Phase B */}
+          <div className={styles.leftCol}>
+            <LeftSidebar
+              agentOnline={integration?.connected ?? false}
+              gmailCount={recentInboxMessages.length}
+              calendarCount={upcomingEvents.length}
+              slackConnected={slackHasToken}
+              threads={threads}
+              agentThreadId={agentThreadId}
+              agentThreadOpeningId={agentThreadOpeningId}
+              onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: false })}
+              onNewConversation={handleStartNewConversation}
+              formatDateTime={formatDateTime}
+              truncateWithEllipsis={truncateWithEllipsis}
+            />
+          </div>
+          {/* Center column — all existing content lives here during Phase A */}
+          <div className={styles.centerCol}>
 
-        {integration?.connected && (briefingPreparing || (preparedBriefingSummary && !briefingDismissed)) ? (
-          <section className={styles.briefingCard}>
-            <div className={styles.briefingCardHeader}>
-              <span className={styles.briefingCardLabel}>
-                {preparedBriefingDateKey ?? "Today"}
-              </span>
-              {!briefingDismissed && (
-                <button
-                  type="button"
-                  className={styles.briefingDismiss}
-                  onClick={() => setBriefingDismissed(true)}
-                  aria-label="Dismiss briefing"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-            {briefingPreparing ? (
-              <p className={styles.briefingLoading}>Preparing your briefing…</p>
-            ) : (
-              <>
-                <div className={styles.briefingText}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{preparedBriefingSummary ?? ""}</ReactMarkdown>
-                </div>
-                <div className={styles.briefingActions}>
-                  {pinnedContext.some((c) => c.type === "briefing") ? (
+            {integration?.connected && (briefingPreparing || (preparedBriefingSummary && !briefingDismissed)) ? (
+              <section className={styles.briefingCard}>
+                <div className={styles.briefingCardHeader}>
+                  <span className={styles.briefingCardLabel}>
+                    {preparedBriefingDateKey ?? "Today"}
+                  </span>
+                  {!briefingDismissed && (
                     <button
                       type="button"
-                      className={styles.pinButtonActive}
-                      onClick={() => setPinnedContext((prev) => prev.filter((c) => c.type !== "briefing"))}
+                      className={styles.briefingDismiss}
+                      onClick={() => setBriefingDismissed(true)}
+                      aria-label="Dismiss briefing"
                     >
-                      Pinned to chat ✕
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.pinButton}
-                      onClick={() => setPinnedContext((prev) => [
-                        ...prev.filter((c) => c.type !== "briefing"),
-                        {
-                          type: "briefing",
-                          id: `briefing-${preparedBriefingDateKey ?? "today"}`,
-                          title: `Morning briefing (${preparedBriefingDateKey ?? "today"})`,
-                          snippet: preparedBriefingSummary ?? "",
-                        },
-                      ])}
-                    >
-                      Pin to chat
+                      ✕
                     </button>
                   )}
                 </div>
-              </>
-            )}
-          </section>
-        ) : null}
-
-        <section className={chatExpanded ? `${styles.panel} ${styles.panelChatExpanded}` : styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Alik</h2>
-            <div className={styles.buttonRow}>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={handleStartNewConversation}
-              >
-                New conversation
-              </button>
-              {agentThreadId ? (
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => openAgentThread(agentThreadId)}
-                  disabled={agentThreadOpeningId === agentThreadId}
-                >
-                  {agentThreadOpeningId === agentThreadId ? "Refreshing..." : "Refresh thread"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => setChatExpanded((v) => !v)}
-              >
-                {chatExpanded ? "Collapse" : "Expand"}
-              </button>
-            </div>
-          </div>
-
-          <div ref={chatLogRef} className={chatExpanded ? `${styles.chatLog} ${styles.chatLogExpanded}` : styles.chatLog}>
-            {agentThreadLoading ? (
-              <p className={styles.meta}>Loading conversation...</p>
+                {briefingPreparing ? (
+                  <p className={styles.briefingLoading}>Preparing your briefing…</p>
+                ) : (
+                  <>
+                    <div className={styles.briefingText}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{preparedBriefingSummary ?? ""}</ReactMarkdown>
+                    </div>
+                    <div className={styles.briefingActions}>
+                      {pinnedContext.some((c) => c.type === "briefing") ? (
+                        <button
+                          type="button"
+                          className={styles.pinButtonActive}
+                          onClick={() => setPinnedContext((prev) => prev.filter((c) => c.type !== "briefing"))}
+                        >
+                          Pinned to chat ✕
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.pinButton}
+                          onClick={() => setPinnedContext((prev) => [
+                            ...prev.filter((c) => c.type !== "briefing"),
+                            {
+                              type: "briefing",
+                              id: `briefing-${preparedBriefingDateKey ?? "today"}`,
+                              title: `Morning briefing (${preparedBriefingDateKey ?? "today"})`,
+                              snippet: preparedBriefingSummary ?? "",
+                            },
+                          ])}
+                        >
+                          Pin to chat
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </section>
             ) : null}
-            {agentMessages.length === 0 && !agentThreadLoading ? (
-              <p className={styles.meta}>
-                No messages yet. Ask Alik to plan, email, or schedule something.
-              </p>
-            ) : null}
-            {agentMessages.map((message) => (
-              <article
-                key={message.id}
-                className={
-                  message.role === "user"
-                    ? styles.chatMessageUser
-                    : styles.chatMessageAssistant
-                }
-              >
-                <p className={styles.chatRole}>
-                  {message.role === "user" ? "You" : "Alik"}
-                </p>
-                <div className={styles.chatText}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a: ({ href, children }) => (
-                        <a href={href} target="_blank" rel="noreferrer">{children}</a>
-                      ),
-                    }}
-                  >{message.text}</ReactMarkdown>
-                </div>
-              </article>
-            ))}
-            {isSubmittingRun && thinkingSteps.length > 0 ? (
-              <div className={styles.thinkingSteps}>
-                {thinkingSteps.map((step, i) => (
-                  <div key={i} className={styles.thinkingStep}>
-                    <span className={styles.thinkingStepIcon}>→</span>
-                    <span className={styles.thinkingStepName}>{step.toolName}</span>
-                    {step.preview ? <span className={styles.thinkingStepPreview}>{step.preview}</span> : null}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {isSubmittingRun && streamingAssistantText.trim().length > 0 ? (
-              <article className={`${styles.chatMessageAssistant} ${styles.streamingMessage}`}>
-                <p className={styles.chatRole}>Alik</p>
-                <div className={styles.chatText}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a: ({ href, children }) => (
-                        <a href={href} target="_blank" rel="noreferrer">{children}</a>
-                      ),
-                    }}
-                  >{streamingAssistantText}</ReactMarkdown>
-                </div>
-              </article>
-            ) : null}
-            {isSubmittingRun && streamingAssistantText.trim().length === 0 ? (
-              <p className={styles.meta}>
-                {thinkingSteps.length > 0 ? "Waiting for response..." : "Alik is thinking..."}
-              </p>
-            ) : null}
-          </div>
 
-          {thoughtText.length > 0 ? (
-            <div className={styles.thoughtBlock}>
-              <button
-                type="button"
-                className={styles.thoughtToggle}
-                onClick={() => setThoughtExpanded((v) => !v)}
-              >
-                <span className={styles.thoughtToggleIcon}>{thoughtExpanded ? "▾" : "▸"}</span>
-                {isSubmittingRun ? "Thinking…" : "Thought process"}
-              </button>
-              {thoughtExpanded ? (
-                <div className={styles.thoughtText}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{thoughtText}</ReactMarkdown>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {pinnedContext.length > 0 ? (
-            <div className={styles.pinnedContextBar}>
-              <span className={styles.pinnedContextBarLabel}>Context:</span>
-              {pinnedContext.map((item) => (
-                <span key={item.id} className={styles.contextChip}>
-                  {item.title ? item.title.slice(0, 40) : item.id}
-                  <button
-                    type="button"
-                    className={styles.contextChipRemove}
-                    onClick={() =>
-                      setPinnedContext((prev) => prev.filter((c) => c.id !== item.id))
-                    }
-                    aria-label={`Remove ${item.title ?? item.id} from context`}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <label htmlFor="prompt" className={styles.label}>
-            Your message
-          </label>
-          <textarea
-            id="prompt"
-            className={styles.chatComposer}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Ask Alik to draft an email, create an event, or plan work..."
-          />
-          <button
-            type="button"
-            className={styles.runButton}
-            onClick={handleRunAgentStub}
-            disabled={isSubmittingRun || prompt.trim().length === 0}
-          >
-            {isSubmittingRun ? "Sending..." : "Send"}
-          </button>
-
-          {agentPendingApproval ? (
-            <div className={styles.approvalCard}>
-              <p className={styles.approvalTitle}>Agent Approval Required</p>
-              <p className={styles.meta}>
-                Tool: <strong>{agentPendingApproval.tool}</strong>
-              </p>
-              <p className={styles.meta}>{agentPendingApproval.reason}</p>
-              <pre className={styles.result}>{agentPendingApproval.preview}</pre>
-              <label className={styles.label}>
-                If rejecting, what should change? (optional)
-                <textarea
-                  className={styles.textarea}
-                  value={agentApprovalFeedback}
-                  onChange={(event) => setAgentApprovalFeedback(event.target.value)}
-                  placeholder="e.g., adjust recipient/date/content..."
-                />
-              </label>
-              <div className={styles.buttonRow}>
-                <button
-                  type="button"
-                  className={styles.dangerButton}
-                  onClick={() => void handleResolveAgentApproval("reject")}
-                  disabled={agentApprovalSubmitting}
-                >
-                  {agentApprovalSubmitting ? "Working..." : "No"}
-                </button>
-                <button
-                  type="button"
-                  className={styles.runButton}
-                  onClick={() => void handleResolveAgentApproval("approve_once")}
-                  disabled={agentApprovalSubmitting}
-                >
-                  {agentApprovalSubmitting ? "Working..." : "Yes"}
-                </button>
-                {agentPendingApproval.tool === "gmail_send" ? (
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() =>
-                      void handleResolveAgentApproval(
-                        "approve_and_always_allow_recipient",
-                      )
-                    }
-                    disabled={agentApprovalSubmitting}
-                  >
-                    {agentApprovalSubmitting
-                      ? "Working..."
-                      : "Yes and always allow for this recipient"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {agentApprovalError ? <p className={styles.error}>{agentApprovalError}</p> : null}
-          {agentApprovalResult ? (
-            <pre className={styles.result}>
-              {JSON.stringify(agentApprovalResult, null, 2)}
-            </pre>
-          ) : null}
-          {runError ? <p className={styles.error}>{runError}</p> : null}
-          {runResult ? (
-            <pre className={styles.result}>{JSON.stringify(runResult, null, 2)}</pre>
-          ) : null}
-        </section>
-
-        <section className={`${styles.panel} ${styles.heroPanel}`}>
-          <p className={styles.heroLead}>
-            Live context for your day, fast approvals, and one place to delegate to Alik.
-          </p>
-          <div className={styles.statGrid}>
-            <article className={styles.statCard}>
-              <p className={styles.statLabel}>Google</p>
-              <p className={styles.statValue}>
-                {integration?.connected ? "Connected" : "Not connected"}
-              </p>
-            </article>
-            <article className={styles.statCard}>
-              <p className={styles.statLabel}>Upcoming Events</p>
-              <p className={styles.statValue}>{upcomingEvents.length}</p>
-            </article>
-            <article className={styles.statCard}>
-              <p className={styles.statLabel}>Latest Emails</p>
-              <p className={styles.statValue}>{recentInboxMessages.length}</p>
-            </article>
-            <article className={styles.statCard}>
-              <p className={styles.statLabel}>Pending Approvals</p>
-              <p className={styles.statValue}>{agentPendingApproval ? 1 : 0}</p>
-            </article>
-            <article className={styles.statCard}>
-              <p className={styles.statLabel}>Autonomy Mode</p>
-              <p className={styles.statValue}>
-                {formatTrustLevelLabel(agentTrustLevel)}
-              </p>
-            </article>
-          </div>
-          <div className={styles.trustPanel}>
-            <p className={styles.statLabel}>How much Alik can do on her own</p>
-            <div className={styles.trustLevelRow}>
-              {AGENT_TRUST_LEVEL_OPTIONS.map((option) => {
-                const isActive = option.value === agentTrustLevel;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`${styles.trustLevelButton} ${isActive ? styles.trustLevelButtonActive : ""
-                      }`}
-                    disabled={agentTrustSubmitting || agentTrustLoading}
-                    onClick={() => void setTrustLevel(option.value)}
-                  >
-                    <span className={styles.trustLevelLabel}>{option.label}</span>
-                    <span className={styles.trustLevelSummary}>{option.summary}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {agentTrustLoading ? (
-              <p className={styles.meta}>Loading autonomy mode...</p>
-            ) : null}
-            {agentTrustLevelSource ? (
-              <p className={styles.meta}>Source: {agentTrustLevelSource}</p>
-            ) : null}
-            {agentTrustMessage ? <p className={styles.meta}>{agentTrustMessage}</p> : null}
-            {agentTrustError ? <p className={styles.error}>{agentTrustError}</p> : null}
-          </div>
-        </section>
-
-        {oauthError ? (
-          <section className={styles.panel}>
-            <p className={styles.error}>
-              Google OAuth returned an error: <code>{oauthError}</code>
-            </p>
-          </section>
-        ) : null}
-
-        <GoogleWorkspaceIntegrationPanel
-          integrationLoading={integrationLoading}
-          workspaceLoading={workspaceLoading}
-          integrationError={integrationError}
-          integration={integration}
-          pulseReady={pulseReady}
-          onRefreshWorkspace={() => void handleRefreshWorkspace()}
-          formatScopeLabel={formatScopeLabel}
-        />
-
-        <ProfilePanel
-          profileLoading={profileLoading}
-          profileDisplayName={profileDisplayName}
-          profileRole={profileRole}
-          profileOrganization={profileOrganization}
-          profileTimezone={profileTimezone}
-          profileInterests={profileInterests}
-          profileProjects={profileProjects}
-          profileNotes={profileNotes}
-          profileSaving={profileSaving}
-          profileSaved={profileSaved}
-          profileError={profileError}
-          onChangeDisplayName={(value) => {
-            setProfileDisplayName(value);
-            setProfileSaved(false);
-          }}
-          onChangeRole={(value) => {
-            setProfileRole(value);
-            setProfileSaved(false);
-          }}
-          onChangeOrganization={(value) => {
-            setProfileOrganization(value);
-            setProfileSaved(false);
-          }}
-          onChangeTimezone={(value) => {
-            setProfileTimezone(value);
-            setProfileSaved(false);
-          }}
-          onChangeInterests={(value) => {
-            setProfileInterests(value);
-            setProfileSaved(false);
-          }}
-          onChangeProjects={(value) => {
-            setProfileProjects(value);
-            setProfileSaved(false);
-          }}
-          onChangeNotes={(value) => {
-            setProfileNotes(value);
-            setProfileSaved(false);
-          }}
-          onSaveProfile={() => void handleSaveProfile()}
-        />
-
-        <SlackIntegrationPanel
-          slackToken={slackToken}
-          slackHasToken={slackHasToken}
-          slackChecking={slackChecking}
-          slackSaving={slackSaving}
-          slackSaved={slackSaved}
-          slackError={slackError}
-          onChangeSlackToken={(value) => {
-            setSlackToken(value);
-            setSlackSaved(false);
-          }}
-          onSaveSlackToken={() => void handleSaveSlackToken()}
-        />
-
-        <MemoryPanel
-          memoryLoading={memoryLoading}
-          memoryError={memoryError}
-          memoryEntries={memoryEntries}
-          memoryDeletingId={memoryDeletingId}
-          onRefreshMemory={() => void refreshMemory()}
-          onDeleteMemoryEntry={(id) => void handleDeleteMemoryEntry(id)}
-        />
-
-        <WorkspacePulsePanel
-          integrationConnected={Boolean(integration?.connected)}
-          integrationLoading={integrationLoading}
-          workspaceLoading={workspaceLoading}
-          workspaceError={workspaceError}
-          workspaceRefreshedAt={workspaceRefreshedAt}
-          upcomingEvents={upcomingEvents}
-          recentInboxMessages={recentInboxMessages}
-          recentDrafts={recentDrafts}
-          pinnedContext={pinnedContext}
-          expandedCalendarDescriptions={expandedCalendarDescriptions}
-          draftSendLoadingId={draftSendLoadingId}
-          draftConfirmId={draftConfirmId}
-          onRefreshWorkspace={() => void handleRefreshWorkspace()}
-          onToggleCalendarDescription={(eventKey) =>
-            setExpandedCalendarDescriptions((previous) => ({
-              ...previous,
-              [eventKey]: !previous[eventKey],
-            }))
-          }
-          onPinCalendarEvent={(event) =>
-            setPinnedContext((prev) => [
-              ...prev,
-              {
-                type: "calendar_event",
-                id: event.id ?? `event-${event.startIso}`,
-                title: event.summary,
-                snippet: event.description ?? undefined,
-                meta: {
-                  startIso: event.startIso,
-                  endIso: event.endIso,
-                  location: event.location,
-                },
-              },
-            ])
-          }
-          onPinInboxMessage={(message) =>
-            setPinnedContext((prev) => [
-              ...prev,
-              {
-                type: "email",
-                id: message.id,
-                title: message.subject,
-                snippet: message.snippet,
-                meta: { from: message.from },
-              },
-            ])
-          }
-          onUnpinContextById={(id) =>
-            setPinnedContext((prev) => prev.filter((context) => context.id !== id))
-          }
-          onSendDraft={(draftId) => void handleSendDraft(draftId)}
-          formatDateTime={formatDateTime}
-          truncateWithEllipsis={truncateWithEllipsis}
-          buildCalendarEventKey={buildCalendarEventKey}
-        />
-
-        <PastConversationsPanel
-          threads={threads}
-          threadsLoading={threadsLoading}
-          threadsError={threadsError}
-          threadsHasMore={threadsHasMore}
-          agentThreadId={agentThreadId}
-          agentThreadOpeningId={agentThreadOpeningId}
-          onRefresh={() => void refreshThreads()}
-          onLoadMore={() => void refreshThreads(threadsCursor)}
-          onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
-          formatDateTime={formatDateTime}
-          truncateWithEllipsis={truncateWithEllipsis}
-        />
-
-        <RecentActivityPanel
-          activityRuns={activityRuns}
-          activityLoading={activityLoading}
-          activityError={activityError}
-          agentThreadOpeningId={agentThreadOpeningId}
-          onRefresh={() => void refreshActivity()}
-          onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
-          formatDateTime={formatDateTime}
-          truncateWithEllipsis={truncateWithEllipsis}
-          getRunStatusBadge={getRunStatusBadge}
-        />
-
-        <div className={styles.toolsGrid}>
-          <section className={styles.panel}>
-            <h2 className={styles.panelTitle}>Manual Gmail Send</h2>
-            <input
-              className={styles.input}
-              placeholder="to@example.com"
-              value={gmailTo}
-              onChange={(event) => setGmailTo(event.target.value)}
-            />
-            <input
-              className={styles.input}
-              placeholder="Subject"
-              value={gmailSubject}
-              onChange={(event) => setGmailSubject(event.target.value)}
-            />
-            <textarea
-              className={styles.textarea}
-              value={gmailBody}
-              onChange={(event) => setGmailBody(event.target.value)}
-            />
-            <button
-              type="button"
-              className={styles.runButton}
-              onClick={handleRequestGmailApproval}
-              disabled={gmailSubmitting}
-            >
-              {gmailSubmitting ? "Requesting..." : "Request send approval"}
-            </button>
-
-            {gmailPendingApproval ? (
-              <div className={styles.approvalCard}>
-                <p className={styles.approvalTitle}>Approval Required</p>
-                <p className={styles.meta}>
-                  The agent wants to send an email to{" "}
-                  <strong>{gmailPendingApproval.to}</strong> with subject{" "}
-                  <strong>{gmailPendingApproval.subject}</strong>.
-                </p>
-                <pre className={styles.result}>{gmailPendingApproval.bodyPreview}</pre>
-                <label className={styles.label}>
-                  If rejecting, what should change? (optional for now)
-                  <textarea
-                    className={styles.textarea}
-                    value={gmailDecisionFeedback}
-                    onChange={(event) => setGmailDecisionFeedback(event.target.value)}
-                    placeholder="e.g., change tone, add details, different recipient..."
-                  />
-                </label>
+            <section className={chatExpanded ? `${styles.panel} ${styles.panelChatExpanded}` : styles.panel}>
+              <div className={styles.panelHeader}>
+                <h2 className={styles.panelTitle}>Alik</h2>
                 <div className={styles.buttonRow}>
                   <button
                     type="button"
-                    className={styles.dangerButton}
-                    onClick={() => void handleResolveGmailApproval("reject")}
-                    disabled={gmailDecisionSubmitting}
+                    className={styles.secondaryButton}
+                    onClick={handleStartNewConversation}
                   >
-                    {gmailDecisionSubmitting ? "Working..." : "No"}
+                    New conversation
                   </button>
-                  <button
-                    type="button"
-                    className={styles.runButton}
-                    onClick={() => void handleResolveGmailApproval("approve_once")}
-                    disabled={gmailDecisionSubmitting}
-                  >
-                    {gmailDecisionSubmitting ? "Working..." : "Yes"}
-                  </button>
+                  {agentThreadId ? (
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => openAgentThread(agentThreadId)}
+                      disabled={agentThreadOpeningId === agentThreadId}
+                    >
+                      {agentThreadOpeningId === agentThreadId ? "Refreshing..." : "Refresh thread"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() =>
-                      void handleResolveGmailApproval(
-                        "approve_and_always_allow_recipient",
-                      )
-                    }
-                    disabled={gmailDecisionSubmitting}
+                    onClick={() => setChatExpanded((v) => !v)}
                   >
-                    {gmailDecisionSubmitting
-                      ? "Working..."
-                      : "Yes and always allow for this recipient"}
+                    {chatExpanded ? "Collapse" : "Expand"}
                   </button>
                 </div>
               </div>
+
+              <div ref={chatLogRef} className={chatExpanded ? `${styles.chatLog} ${styles.chatLogExpanded}` : styles.chatLog}>
+                {agentThreadLoading ? (
+                  <p className={styles.meta}>Loading conversation...</p>
+                ) : null}
+                {agentMessages.length === 0 && !agentThreadLoading ? (
+                  <p className={styles.meta}>
+                    No messages yet. Ask Alik to plan, email, or schedule something.
+                  </p>
+                ) : null}
+                {agentMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={
+                      message.role === "user"
+                        ? styles.chatMessageUser
+                        : styles.chatMessageAssistant
+                    }
+                  >
+                    <p className={styles.chatRole}>
+                      {message.role === "user" ? "You" : "Alik"}
+                    </p>
+                    <div className={styles.chatText}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noreferrer">{children}</a>
+                          ),
+                        }}
+                      >{message.text}</ReactMarkdown>
+                    </div>
+                  </article>
+                ))}
+                {isSubmittingRun && thinkingSteps.length > 0 ? (
+                  <div className={styles.actionCard}>
+                    {thinkingSteps.map((step, i) => (
+                      <div key={i} className={styles.actionCardRow}>
+                        <span className={styles.actionCardIcon}>→</span>
+                        <span className={styles.actionCardText}>{step.toolName}</span>
+                        {step.preview ? (
+                          <span className={styles.actionCardPreview}>{step.preview}</span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {isSubmittingRun && streamingAssistantText.trim().length > 0 ? (
+                  <article className={`${styles.chatMessageAssistant} ${styles.streamingMessage}`}>
+                    <p className={styles.chatRole}>Alik</p>
+                    <div className={styles.chatText}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noreferrer">{children}</a>
+                          ),
+                        }}
+                      >{streamingAssistantText}</ReactMarkdown>
+                    </div>
+                  </article>
+                ) : null}
+                {isSubmittingRun && streamingAssistantText.trim().length === 0 ? (
+                  <p className={styles.meta}>
+                    {thinkingSteps.length > 0 ? "Waiting for response..." : "Alik is thinking..."}
+                  </p>
+                ) : null}
+              </div>
+
+              {thoughtText.length > 0 ? (
+                <div className={styles.thoughtBlock}>
+                  <button
+                    type="button"
+                    className={styles.thoughtToggle}
+                    onClick={() => setThoughtExpanded((v) => !v)}
+                  >
+                    <span className={styles.thoughtToggleIcon}>{thoughtExpanded ? "▾" : "▸"}</span>
+                    {isSubmittingRun ? "Thinking…" : "Thought process"}
+                  </button>
+                  {thoughtExpanded ? (
+                    <div className={styles.thoughtText}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{thoughtText}</ReactMarkdown>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {pinnedContext.length > 0 ? (
+                <div className={styles.pinnedContextBar}>
+                  <span className={styles.pinnedContextBarLabel}>Context:</span>
+                  {pinnedContext.map((item) => (
+                    <span key={item.id} className={styles.contextChip}>
+                      {item.title ? item.title.slice(0, 40) : item.id}
+                      <button
+                        type="button"
+                        className={styles.contextChipRemove}
+                        onClick={() =>
+                          setPinnedContext((prev) => prev.filter((c) => c.id !== item.id))
+                        }
+                        aria-label={`Remove ${item.title ?? item.id} from context`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <label htmlFor="prompt" className={styles.label}>
+                Your message
+              </label>
+              <textarea
+                id="prompt"
+                className={styles.chatComposer}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Ask Alik to draft an email, create an event, or plan work..."
+              />
+              <button
+                type="button"
+                className={styles.runButton}
+                onClick={handleRunAgentStub}
+                disabled={isSubmittingRun || prompt.trim().length === 0}
+              >
+                {isSubmittingRun ? "Sending..." : "Send"}
+              </button>
+
+              {agentPendingApproval ? (
+                <div className={styles.approvalCardInline}>
+                  <p className={styles.approvalCardTitle}>
+                    Proposed action: {agentPendingApproval.tool}
+                  </p>
+                  {agentPendingApproval.reason ? (
+                    <p className={styles.approvalCardBody}>{agentPendingApproval.reason}</p>
+                  ) : null}
+                  {agentPendingApproval.preview ? (
+                    <pre className={styles.approvalCardPreview}>{agentPendingApproval.preview}</pre>
+                  ) : null}
+                  <label className={styles.label}>
+                    If rejecting, what should change? (optional)
+                    <textarea
+                      className={styles.textarea}
+                      value={agentApprovalFeedback}
+                      onChange={(event) => setAgentApprovalFeedback(event.target.value)}
+                      placeholder="e.g., adjust recipient/date/content..."
+                    />
+                  </label>
+                  <div className={styles.approvalCardActions}>
+                    <button
+                      type="button"
+                      className={styles.approvalRejectButton}
+                      onClick={() => void handleResolveAgentApproval("reject")}
+                      disabled={agentApprovalSubmitting}
+                    >
+                      {agentApprovalSubmitting ? "Working..." : "Reject"}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.approvalApproveButton}
+                      onClick={() => void handleResolveAgentApproval("approve_once")}
+                      disabled={agentApprovalSubmitting}
+                    >
+                      {agentApprovalSubmitting ? "Working..." : "Approve"}
+                    </button>
+                    {agentPendingApproval.tool === "gmail_send" ? (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => void handleResolveAgentApproval("approve_and_always_allow_recipient")}
+                        disabled={agentApprovalSubmitting}
+                      >
+                        {agentApprovalSubmitting ? "Working..." : "Always allow for this recipient"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {agentApprovalError ? <p className={styles.error}>{agentApprovalError}</p> : null}
+              {agentApprovalResult ? (
+                <pre className={styles.result}>
+                  {JSON.stringify(agentApprovalResult, null, 2)}
+                </pre>
+              ) : null}
+              {runError ? <p className={styles.error}>{runError}</p> : null}
+              {runResult ? (
+                <pre className={styles.result}>{JSON.stringify(runResult, null, 2)}</pre>
+              ) : null}
+            </section>
+
+            <section className={`${styles.panel} ${styles.heroPanel}`}>
+              <p className={styles.heroLead}>
+                Live context for your day, fast approvals, and one place to delegate to Alik.
+              </p>
+              <div className={styles.statGrid}>
+                <article className={styles.statCard}>
+                  <p className={styles.statLabel}>Google</p>
+                  <p className={styles.statValue}>
+                    {integration?.connected ? "Connected" : "Not connected"}
+                  </p>
+                </article>
+                <article className={styles.statCard}>
+                  <p className={styles.statLabel}>Upcoming Events</p>
+                  <p className={styles.statValue}>{upcomingEvents.length}</p>
+                </article>
+                <article className={styles.statCard}>
+                  <p className={styles.statLabel}>Latest Emails</p>
+                  <p className={styles.statValue}>{recentInboxMessages.length}</p>
+                </article>
+                <article className={styles.statCard}>
+                  <p className={styles.statLabel}>Pending Approvals</p>
+                  <p className={styles.statValue}>{agentPendingApproval ? 1 : 0}</p>
+                </article>
+                <article className={styles.statCard}>
+                  <p className={styles.statLabel}>Autonomy Mode</p>
+                  <p className={styles.statValue}>
+                    {formatTrustLevelLabel(agentTrustLevel)}
+                  </p>
+                </article>
+              </div>
+              <div className={styles.trustPanel}>
+                <p className={styles.statLabel}>How much Alik can do on her own</p>
+                <div className={styles.trustLevelRow}>
+                  {AGENT_TRUST_LEVEL_OPTIONS.map((option) => {
+                    const isActive = option.value === agentTrustLevel;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`${styles.trustLevelButton} ${isActive ? styles.trustLevelButtonActive : ""
+                          }`}
+                        disabled={agentTrustSubmitting || agentTrustLoading}
+                        onClick={() => void setTrustLevel(option.value)}
+                      >
+                        <span className={styles.trustLevelLabel}>{option.label}</span>
+                        <span className={styles.trustLevelSummary}>{option.summary}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {agentTrustLoading ? (
+                  <p className={styles.meta}>Loading autonomy mode...</p>
+                ) : null}
+                {agentTrustLevelSource ? (
+                  <p className={styles.meta}>Source: {agentTrustLevelSource}</p>
+                ) : null}
+                {agentTrustMessage ? <p className={styles.meta}>{agentTrustMessage}</p> : null}
+                {agentTrustError ? <p className={styles.error}>{agentTrustError}</p> : null}
+              </div>
+            </section>
+
+            {oauthError ? (
+              <section className={styles.panel}>
+                <p className={styles.error}>
+                  Google OAuth returned an error: <code>{oauthError}</code>
+                </p>
+              </section>
             ) : null}
 
-            {gmailError ? <p className={styles.error}>{gmailError}</p> : null}
-            {gmailResult ? (
-              <pre className={styles.result}>{JSON.stringify(gmailResult, null, 2)}</pre>
-            ) : null}
-          </section>
+            <GoogleWorkspaceIntegrationPanel
+              integrationLoading={integrationLoading}
+              workspaceLoading={workspaceLoading}
+              integrationError={integrationError}
+              integration={integration}
+              pulseReady={pulseReady}
+              onRefreshWorkspace={() => void handleRefreshWorkspace()}
+              formatScopeLabel={formatScopeLabel}
+            />
 
-          <section className={styles.panel}>
-            <h2 className={styles.panelTitle}>Manual Calendar Event</h2>
-            <input
-              className={styles.input}
-              placeholder="Summary"
-              value={eventSummary}
-              onChange={(event) => setEventSummary(event.target.value)}
+            <ProfilePanel
+              profileLoading={profileLoading}
+              profileDisplayName={profileDisplayName}
+              profileRole={profileRole}
+              profileOrganization={profileOrganization}
+              profileTimezone={profileTimezone}
+              profileInterests={profileInterests}
+              profileProjects={profileProjects}
+              profileNotes={profileNotes}
+              profileSaving={profileSaving}
+              profileSaved={profileSaved}
+              profileError={profileError}
+              onChangeDisplayName={(value) => {
+                setProfileDisplayName(value);
+                setProfileSaved(false);
+              }}
+              onChangeRole={(value) => {
+                setProfileRole(value);
+                setProfileSaved(false);
+              }}
+              onChangeOrganization={(value) => {
+                setProfileOrganization(value);
+                setProfileSaved(false);
+              }}
+              onChangeTimezone={(value) => {
+                setProfileTimezone(value);
+                setProfileSaved(false);
+              }}
+              onChangeInterests={(value) => {
+                setProfileInterests(value);
+                setProfileSaved(false);
+              }}
+              onChangeProjects={(value) => {
+                setProfileProjects(value);
+                setProfileSaved(false);
+              }}
+              onChangeNotes={(value) => {
+                setProfileNotes(value);
+                setProfileSaved(false);
+              }}
+              onSaveProfile={() => void handleSaveProfile()}
             />
-            <input
-              className={styles.input}
-              placeholder="Description"
-              value={eventDescription}
-              onChange={(event) => setEventDescription(event.target.value)}
+
+            <SlackIntegrationPanel
+              slackToken={slackToken}
+              slackHasToken={slackHasToken}
+              slackChecking={slackChecking}
+              slackSaving={slackSaving}
+              slackSaved={slackSaved}
+              slackError={slackError}
+              onChangeSlackToken={(value) => {
+                setSlackToken(value);
+                setSlackSaved(false);
+              }}
+              onSaveSlackToken={() => void handleSaveSlackToken()}
             />
-            <label className={styles.label}>
-              Start
-              <input
-                className={styles.input}
-                type="datetime-local"
-                value={eventStartIso}
-                onChange={(event) => setEventStartIso(event.target.value)}
-              />
-            </label>
-            <label className={styles.label}>
-              End
-              <input
-                className={styles.input}
-                type="datetime-local"
-                value={eventEndIso}
-                onChange={(event) => setEventEndIso(event.target.value)}
-              />
-            </label>
-            <button
-              type="button"
-              className={styles.runButton}
-              onClick={handleCreateCalendarEvent}
-              disabled={calendarSubmitting}
-            >
-              {calendarSubmitting ? "Creating..." : "Create event"}
-            </button>
-            {calendarError ? <p className={styles.error}>{calendarError}</p> : null}
-            {calendarResult ? (
-              <pre className={styles.result}>
-                {JSON.stringify(calendarResult, null, 2)}
-              </pre>
-            ) : null}
-          </section>
+
+            <MemoryPanel
+              memoryLoading={memoryLoading}
+              memoryError={memoryError}
+              memoryEntries={memoryEntries}
+              memoryDeletingId={memoryDeletingId}
+              onRefreshMemory={() => void refreshMemory()}
+              onDeleteMemoryEntry={(id) => void handleDeleteMemoryEntry(id)}
+            />
+
+            <WorkspacePulsePanel
+              integrationConnected={Boolean(integration?.connected)}
+              integrationLoading={integrationLoading}
+              workspaceLoading={workspaceLoading}
+              workspaceError={workspaceError}
+              workspaceRefreshedAt={workspaceRefreshedAt}
+              upcomingEvents={upcomingEvents}
+              recentInboxMessages={recentInboxMessages}
+              recentDrafts={recentDrafts}
+              pinnedContext={pinnedContext}
+              expandedCalendarDescriptions={expandedCalendarDescriptions}
+              draftSendLoadingId={draftSendLoadingId}
+              draftConfirmId={draftConfirmId}
+              onRefreshWorkspace={() => void handleRefreshWorkspace()}
+              onToggleCalendarDescription={(eventKey) =>
+                setExpandedCalendarDescriptions((previous) => ({
+                  ...previous,
+                  [eventKey]: !previous[eventKey],
+                }))
+              }
+              onPinCalendarEvent={(event) =>
+                setPinnedContext((prev) => [
+                  ...prev,
+                  {
+                    type: "calendar_event",
+                    id: event.id ?? `event-${event.startIso}`,
+                    title: event.summary,
+                    snippet: event.description ?? undefined,
+                    meta: {
+                      startIso: event.startIso,
+                      endIso: event.endIso,
+                      location: event.location,
+                    },
+                  },
+                ])
+              }
+              onPinInboxMessage={(message) =>
+                setPinnedContext((prev) => [
+                  ...prev,
+                  {
+                    type: "email",
+                    id: message.id,
+                    title: message.subject,
+                    snippet: message.snippet,
+                    meta: { from: message.from },
+                  },
+                ])
+              }
+              onUnpinContextById={(id) =>
+                setPinnedContext((prev) => prev.filter((context) => context.id !== id))
+              }
+              onSendDraft={(draftId) => void handleSendDraft(draftId)}
+              formatDateTime={formatDateTime}
+              truncateWithEllipsis={truncateWithEllipsis}
+              buildCalendarEventKey={buildCalendarEventKey}
+            />
+
+            <PastConversationsPanel
+              threads={threads}
+              threadsLoading={threadsLoading}
+              threadsError={threadsError}
+              threadsHasMore={threadsHasMore}
+              agentThreadId={agentThreadId}
+              agentThreadOpeningId={agentThreadOpeningId}
+              onRefresh={() => void refreshThreads()}
+              onLoadMore={() => void refreshThreads(threadsCursor)}
+              onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
+              formatDateTime={formatDateTime}
+              truncateWithEllipsis={truncateWithEllipsis}
+            />
+
+            <RecentActivityPanel
+              activityRuns={activityRuns}
+              activityLoading={activityLoading}
+              activityError={activityError}
+              agentThreadOpeningId={agentThreadOpeningId}
+              onRefresh={() => void refreshActivity()}
+              onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
+              formatDateTime={formatDateTime}
+              truncateWithEllipsis={truncateWithEllipsis}
+              getRunStatusBadge={getRunStatusBadge}
+            />
+
+            <div className={styles.toolsGrid}>
+              <section className={styles.panel}>
+                <h2 className={styles.panelTitle}>Manual Gmail Send</h2>
+                <input
+                  className={styles.input}
+                  placeholder="to@example.com"
+                  value={gmailTo}
+                  onChange={(event) => setGmailTo(event.target.value)}
+                />
+                <input
+                  className={styles.input}
+                  placeholder="Subject"
+                  value={gmailSubject}
+                  onChange={(event) => setGmailSubject(event.target.value)}
+                />
+                <textarea
+                  className={styles.textarea}
+                  value={gmailBody}
+                  onChange={(event) => setGmailBody(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className={styles.runButton}
+                  onClick={handleRequestGmailApproval}
+                  disabled={gmailSubmitting}
+                >
+                  {gmailSubmitting ? "Requesting..." : "Request send approval"}
+                </button>
+
+                {gmailPendingApproval ? (
+                  <div className={styles.approvalCard}>
+                    <p className={styles.approvalTitle}>Approval Required</p>
+                    <p className={styles.meta}>
+                      The agent wants to send an email to{" "}
+                      <strong>{gmailPendingApproval.to}</strong> with subject{" "}
+                      <strong>{gmailPendingApproval.subject}</strong>.
+                    </p>
+                    <pre className={styles.result}>{gmailPendingApproval.bodyPreview}</pre>
+                    <label className={styles.label}>
+                      If rejecting, what should change? (optional for now)
+                      <textarea
+                        className={styles.textarea}
+                        value={gmailDecisionFeedback}
+                        onChange={(event) => setGmailDecisionFeedback(event.target.value)}
+                        placeholder="e.g., change tone, add details, different recipient..."
+                      />
+                    </label>
+                    <div className={styles.buttonRow}>
+                      <button
+                        type="button"
+                        className={styles.dangerButton}
+                        onClick={() => void handleResolveGmailApproval("reject")}
+                        disabled={gmailDecisionSubmitting}
+                      >
+                        {gmailDecisionSubmitting ? "Working..." : "No"}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.runButton}
+                        onClick={() => void handleResolveGmailApproval("approve_once")}
+                        disabled={gmailDecisionSubmitting}
+                      >
+                        {gmailDecisionSubmitting ? "Working..." : "Yes"}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() =>
+                          void handleResolveGmailApproval(
+                            "approve_and_always_allow_recipient",
+                          )
+                        }
+                        disabled={gmailDecisionSubmitting}
+                      >
+                        {gmailDecisionSubmitting
+                          ? "Working..."
+                          : "Yes and always allow for this recipient"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {gmailError ? <p className={styles.error}>{gmailError}</p> : null}
+                {gmailResult ? (
+                  <pre className={styles.result}>{JSON.stringify(gmailResult, null, 2)}</pre>
+                ) : null}
+              </section>
+
+              <section className={styles.panel}>
+                <h2 className={styles.panelTitle}>Manual Calendar Event</h2>
+                <input
+                  className={styles.input}
+                  placeholder="Summary"
+                  value={eventSummary}
+                  onChange={(event) => setEventSummary(event.target.value)}
+                />
+                <input
+                  className={styles.input}
+                  placeholder="Description"
+                  value={eventDescription}
+                  onChange={(event) => setEventDescription(event.target.value)}
+                />
+                <label className={styles.label}>
+                  Start
+                  <input
+                    className={styles.input}
+                    type="datetime-local"
+                    value={eventStartIso}
+                    onChange={(event) => setEventStartIso(event.target.value)}
+                  />
+                </label>
+                <label className={styles.label}>
+                  End
+                  <input
+                    className={styles.input}
+                    type="datetime-local"
+                    value={eventEndIso}
+                    onChange={(event) => setEventEndIso(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={styles.runButton}
+                  onClick={handleCreateCalendarEvent}
+                  disabled={calendarSubmitting}
+                >
+                  {calendarSubmitting ? "Creating..." : "Create event"}
+                </button>
+                {calendarError ? <p className={styles.error}>{calendarError}</p> : null}
+                {calendarResult ? (
+                  <pre className={styles.result}>
+                    {JSON.stringify(calendarResult, null, 2)}
+                  </pre>
+                ) : null}
+              </section>
+            </div>
+          </div>
+
+          {/* Right column — Phase D */}
+          <div className={styles.rightCol}>
+            <RightRail
+              integrationConnected={Boolean(integration?.connected)}
+              workspaceLoading={workspaceLoading}
+              upcomingEvents={upcomingEvents}
+              recentInboxMessages={recentInboxMessages}
+              recentDrafts={recentDrafts}
+              pinnedContext={pinnedContext}
+              activeToolNames={isSubmittingRun ? thinkingSteps.map((s) => s.toolName) : []}
+              onPin={(item) => setPinnedContext((prev) => [...prev, item])}
+              onUnpin={(id) => setPinnedContext((prev) => prev.filter((c) => c.id !== id))}
+              formatDateTime={formatDateTime}
+              truncateWithEllipsis={truncateWithEllipsis}
+            />
+          </div>
+
         </div>
       </div>
     </main>
