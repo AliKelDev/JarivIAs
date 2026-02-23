@@ -583,6 +583,10 @@
   background: #ffffff;
 }
 
+.streamingMessage {
+  animation: fadeInMessage 200ms ease both;
+}
+
 .thoughtBlock {
   border-radius: 8px;
   background: rgba(100, 80, 160, 0.05);
