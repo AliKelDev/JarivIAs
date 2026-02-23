@@ -4,220 +4,37 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type {
+  ActivityRun,
+  AgentThreadMessage,
+  AgentConversationPayloadMessage,
+  AgentPendingApproval,
+  AgentPendingApprovalsResponse,
+  AgentRunStreamEvent,
+  AgentThreadResponse,
+  AgentTrustLevel,
+  AgentTrustLevelResponse,
+  AttachedContextItem,
+  BriefingPrepareResponse,
+  CalendarUpcomingResponse,
+  DashboardClientProps,
+  GmailDraftsResponse,
+  GmailPendingApproval,
+  GmailRecentResponse,
+  GoogleIntegrationStatus,
+  MemoryEntry,
+  RecentGmailDraftItem,
+  RecentInboxDigestItem,
+  RunResponse,
+  SlackSettingsResponse,
+  ThreadSummary,
+  ToolResult,
+  UpcomingCalendarDigestItem,
+} from "./types";
 import styles from "./dashboard.module.css";
-
-type DashboardClientProps = {
-  user: {
-    uid: string;
-    email?: string | null;
-    name?: string | null;
-  };
-};
-
-type RunResponse = {
-  ok: boolean;
-  runId: string;
-  actionId: string;
-  threadId: string;
-  status: string;
-  summary: string;
-  mode?: string;
-  model?: string;
-  tool?: string;
-  toolArgs?: Record<string, unknown>;
-  approval?: {
-    id: string;
-    tool: string;
-    reason: string;
-    preview: string;
-  };
-  output?: Record<string, unknown>;
-};
-
-type GoogleIntegrationStatus = {
-  connected: boolean;
-  accountEmail?: string | null;
-  scopes?: string[];
-  updatedAt?: string | null;
-};
-
-type ToolResult = Record<string, unknown> | null;
-
-type GmailPendingApproval = {
-  id: string;
-  to: string;
-  subject: string;
-  bodyPreview: string;
-};
-
-type AgentPendingApproval = {
-  id: string;
-  tool: string;
-  reason: string;
-  preview: string;
-  threadId?: string;
-  runId?: string;
-  actionId?: string;
-};
-
-type AgentPendingApprovalsResponse = {
-  ok: boolean;
-  pending: Array<{
-    id: string;
-    tool: string;
-    reason: string;
-    preview: string;
-    threadId: string;
-    runId: string;
-    actionId: string;
-  }>;
-};
-
-type AgentThreadMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  createdAt?: string | null;
-  runId?: string | null;
-  actionId?: string | null;
-};
-
-type AgentThreadResponse = {
-  ok: boolean;
-  threadId: string;
-  messages: AgentThreadMessage[];
-  pendingApprovals: Array<{
-    id: string;
-    tool: string;
-    reason: string;
-    preview: string;
-    runId: string;
-    actionId: string;
-    createdAt?: string | null;
-  }>;
-};
-
-type AgentRunStreamEvent =
-  | { type: "status"; status: string; threadId: string }
-  | { type: "delta"; delta: string }
-  | { type: "thought_delta"; delta: string }
-  | { type: "tool_call"; toolName: string; preview: string }
-  | { type: "result"; result: RunResponse }
-  | { type: "error"; error: string };
-
-type AgentConversationPayloadMessage = {
-  role: "user" | "assistant";
-  text: string;
-};
-
-type UpcomingCalendarDigestItem = {
-  id: string | null;
-  summary: string;
-  description: string | null;
-  startIso: string | null;
-  endIso: string | null;
-  htmlLink: string | null;
-  location: string | null;
-};
-
-type RecentInboxDigestItem = {
-  id: string;
-  threadId: string | null;
-  from: string;
-  subject: string;
-  snippet: string;
-  internalDateIso: string | null;
-};
-
-type CalendarUpcomingResponse = {
-  ok: boolean;
-  events: UpcomingCalendarDigestItem[];
-};
-
-type GmailRecentResponse = {
-  ok: boolean;
-  messages: RecentInboxDigestItem[];
-};
-
-type RecentGmailDraftItem = {
-  id: string;
-  messageId: string | null;
-  threadId: string | null;
-  to: string;
-  subject: string;
-  snippet: string;
-  updatedAtIso: string | null;
-};
-
-type GmailDraftsResponse = {
-  ok: boolean;
-  drafts: RecentGmailDraftItem[];
-};
-
-type BriefingPrepareResponse = {
-  ok: boolean;
-  cached: boolean;
-  summary: string;
-  dateKey: string;
-  timezone: string;
-  source: string;
-  generatedAtIso: string | null;
-  metadata?: {
-    eventCount?: number;
-    messageCount?: number;
-  };
-};
-
-type SlackSettingsResponse = {
-  ok: boolean;
-  hasToken: boolean;
-};
-
-type AgentTrustLevel = "supervised" | "delegated" | "autonomous";
-
-type AttachedContextItem = {
-  type: "email" | "calendar_event" | "briefing";
-  id: string;
-  title?: string;
-  snippet?: string;
-  meta?: Record<string, unknown>;
-};
-
-type ActivityRun = {
-  id: string;
-  status: string;
-  summary: string | null;
-  prompt: string | null;
-  tool: string | null;
-  model: string | null;
-  threadId: string | null;
-  createdAt: string | null;
-};
-
-type MemoryEntry = {
-  id: string;
-  source: string;
-  content: string;
-  confidence: "high" | "medium";
-  threadId?: string;
-  tags?: string[];
-};
-
-type ThreadSummary = {
-  id: string;
-  source: string;
-  createdAt: string | null;
-  updatedAt: string | null;
-  lastMessageAt: string | null;
-  lastMessageRole: "user" | "assistant" | null;
-  lastMessageTextPreview: string;
-};
-
-type AgentTrustLevelResponse = {
-  ok: boolean;
-  trustLevel: AgentTrustLevel;
-  source?: string;
-};
+import { DashboardHeader } from "./components/dashboard-header";
+import { PastConversationsPanel } from "./components/past-conversations-panel";
+import { RecentActivityPanel } from "./components/recent-activity-panel";
 
 const CALENDAR_DESCRIPTION_PREVIEW_LIMIT = 320;
 const AGENT_TRUST_LEVEL_OPTIONS: Array<{
@@ -1745,18 +1562,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
       <div className={styles.backdropOrbOne} />
       <div className={styles.backdropOrbTwo} />
       <div className={styles.container}>
-        <header className={styles.header}>
-          <div className={styles.identity}>
-            <p className={styles.kicker}>Agent Workspace</p>
-            <h1 className={styles.title}>Alik Control Deck</h1>
-            <p className={styles.meta}>
-              {user.name || user.email || user.uid} · {user.uid}
-            </p>
-          </div>
-          <button type="button" className={styles.logoutButton} onClick={handleSignOut}>
-            Sign out
-          </button>
-        </header>
+        <DashboardHeader user={user} onSignOut={() => void handleSignOut()} />
 
         {integration?.connected && (briefingPreparing || (preparedBriefingSummary && !briefingDismissed)) ? (
           <section className={styles.briefingCard}>
@@ -2533,131 +2339,31 @@ export function DashboardClient({ user }: DashboardClientProps) {
           ) : null}
         </section>
 
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Past Conversations</h2>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => void refreshThreads()}
-              disabled={threadsLoading}
-            >
-              {threadsLoading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-          {threadsError ? <p className={styles.error}>{threadsError}</p> : null}
-          {!threadsLoading && threads.length === 0 ? (
-            <p className={styles.meta}>No past conversations yet.</p>
-          ) : null}
-          <ul className={styles.pulseList}>
-            {threads.map((thread) => (
-              <li key={thread.id} className={styles.pulseItem}>
-                <div className={styles.pulseItemHead}>
-                  <p className={styles.pulseItemTitle}>
-                    {thread.lastMessageTextPreview
-                      ? truncateWithEllipsis(thread.lastMessageTextPreview, 80)
-                      : thread.id}
-                  </p>
-                  <p className={styles.pulseItemMeta}>
-                    {formatDateTime(thread.lastMessageAt ?? thread.updatedAt)}
-                  </p>
-                </div>
-                {thread.source && thread.source !== "dashboard" ? (
-                  <p className={styles.pulseItemMeta}>{thread.source}</p>
-                ) : null}
-                <button
-                  type="button"
-                  className={`${styles.inlineTextButton} ${thread.id === agentThreadId ? styles.activeThreadButton : ""}`}
-                  onClick={() => {
-                    openAgentThread(thread.id, { scrollToTop: true });
-                  }}
-                  disabled={agentThreadOpeningId === thread.id}
-                >
-                  {agentThreadOpeningId === thread.id
-                    ? "Opening..."
-                    : thread.id === agentThreadId
-                      ? "Currently open"
-                      : "Open →"}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {threadsHasMore ? (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => void refreshThreads(threadsCursor)}
-              disabled={threadsLoading}
-            >
-              Load more
-            </button>
-          ) : null}
-        </section>
+        <PastConversationsPanel
+          threads={threads}
+          threadsLoading={threadsLoading}
+          threadsError={threadsError}
+          threadsHasMore={threadsHasMore}
+          agentThreadId={agentThreadId}
+          agentThreadOpeningId={agentThreadOpeningId}
+          onRefresh={() => void refreshThreads()}
+          onLoadMore={() => void refreshThreads(threadsCursor)}
+          onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
+          formatDateTime={formatDateTime}
+          truncateWithEllipsis={truncateWithEllipsis}
+        />
 
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2 className={styles.panelTitle}>Recent Activity</h2>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => void refreshActivity()}
-              disabled={activityLoading}
-            >
-              {activityLoading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-          {activityError ? <p className={styles.error}>{activityError}</p> : null}
-          {!activityLoading && activityRuns.length === 0 ? (
-            <p className={styles.meta}>No runs yet. Ask Alik something to get started.</p>
-          ) : null}
-          <ul className={styles.pulseList}>
-            {activityRuns.map((run) => (
-              <li key={run.id} className={styles.pulseItem}>
-                <div className={styles.pulseItemHead}>
-                  <p className={styles.pulseItemTitle}>
-                    {run.prompt ? truncateWithEllipsis(run.prompt, 80) : "(no prompt)"}
-                  </p>
-                  <p className={styles.pulseItemMeta}>{formatDateTime(run.createdAt)}</p>
-                </div>
-                <div className={styles.activityMeta}>
-                  {(() => {
-                    const badge = getRunStatusBadge(run.status);
-                    const badgeClass =
-                      badge.variant === "done"
-                        ? `${styles.statusBadge} ${styles.statusBadgeDone}`
-                        : badge.variant === "failed"
-                          ? `${styles.statusBadge} ${styles.statusBadgeFailed}`
-                          : `${styles.statusBadge} ${styles.statusBadgePending}`;
-                    return <span className={badgeClass}>{badge.label}</span>;
-                  })()}
-                  {run.tool ? (
-                    <span className={styles.toolChip}>{run.tool}</span>
-                  ) : null}
-                  {run.model ? (
-                    <span className={styles.pulseItemMeta}>· {run.model}</span>
-                  ) : null}
-                </div>
-                {run.summary && run.summary !== run.prompt ? (
-                  <p className={styles.pulseSnippet}>
-                    {truncateWithEllipsis(run.summary, 160)}
-                  </p>
-                ) : null}
-                {run.threadId ? (
-                  <button
-                    type="button"
-                    className={styles.inlineTextButton}
-                    onClick={() => {
-                      openAgentThread(run.threadId, { scrollToTop: true });
-                    }}
-                    disabled={agentThreadOpeningId === run.threadId}
-                  >
-                    {agentThreadOpeningId === run.threadId ? "Opening..." : "Open thread →"}
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <RecentActivityPanel
+          activityRuns={activityRuns}
+          activityLoading={activityLoading}
+          activityError={activityError}
+          agentThreadOpeningId={agentThreadOpeningId}
+          onRefresh={() => void refreshActivity()}
+          onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
+          formatDateTime={formatDateTime}
+          truncateWithEllipsis={truncateWithEllipsis}
+          getRunStatusBadge={getRunStatusBadge}
+        />
 
         <div className={styles.toolsGrid}>
           <section className={styles.panel}>
