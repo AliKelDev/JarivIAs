@@ -87,8 +87,9 @@ function createLocalMessage(params: {
   text: string;
   runId?: string | null;
   actionId?: string | null;
+  toolSteps?: Array<{ toolName: string; preview: string }>;
 }): AgentThreadMessage {
-  const { role, text, runId, actionId } = params;
+  const { role, text, runId, actionId, toolSteps } = params;
   return {
     id: `local-${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role,
@@ -96,6 +97,7 @@ function createLocalMessage(params: {
     createdAt: new Date().toISOString(),
     runId: runId ?? null,
     actionId: actionId ?? null,
+    toolSteps: toolSteps && toolSteps.length > 0 ? toolSteps : undefined,
   };
 }
 
@@ -315,6 +317,8 @@ export function useChatRunner(params: UseChatRunnerParams = {}) {
     setAgentMessages((previous) => [...previous, optimisticUserMessage]);
     setPrompt("");
 
+    const completedThinkingSteps: Array<{ toolName: string; preview: string }> = [];
+
     try {
       const response = await fetch("/api/agent/run/stream", {
         method: "POST",
@@ -401,10 +405,9 @@ export function useChatRunner(params: UseChatRunnerParams = {}) {
           }
 
           if (parsed.type === "tool_call") {
-            setThinkingSteps((prev) => [
-              ...prev,
-              { toolName: parsed.toolName, preview: parsed.preview },
-            ]);
+            const step = { toolName: parsed.toolName, preview: parsed.preview };
+            completedThinkingSteps.push(step);
+            setThinkingSteps((prev) => [...prev, step]);
             continue;
           }
 
@@ -471,6 +474,7 @@ export function useChatRunner(params: UseChatRunnerParams = {}) {
           text: assistantText,
           runId: runResponse.runId,
           actionId: runResponse.actionId,
+          toolSteps: completedThinkingSteps.length > 0 ? completedThinkingSteps : undefined,
         });
         setAgentMessages((previous) => [...previous, localAssistantMessage]);
       }

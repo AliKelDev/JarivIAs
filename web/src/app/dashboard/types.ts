@@ -72,6 +72,7 @@ export type AgentThreadMessage = {
   createdAt?: string | null;
   runId?: string | null;
   actionId?: string | null;
+  toolSteps?: Array<{ toolName: string; preview: string }>;
 };
 
 export type AgentThreadResponse = {

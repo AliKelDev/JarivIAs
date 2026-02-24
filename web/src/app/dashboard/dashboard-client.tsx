@@ -1097,6 +1097,19 @@ export function DashboardClient({ user }: DashboardClientProps) {
                     <p className={styles.chatRole}>
                       {message.role === "user" ? "You" : "Alik"}
                     </p>
+                    {message.toolSteps && message.toolSteps.length > 0 ? (
+                      <div className={styles.actionCard}>
+                        {message.toolSteps.map((step, i) => (
+                          <div key={i} className={styles.actionCardRow}>
+                            <span className={styles.actionCardIcon}>→</span>
+                            <span className={styles.actionCardText}>{step.toolName}</span>
+                            {step.preview ? (
+                              <span className={styles.actionCardPreview}>{step.preview}</span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className={styles.chatText}>
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
