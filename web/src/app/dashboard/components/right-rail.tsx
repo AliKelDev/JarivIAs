@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
     AttachedContextItem,
     RecentInboxDigestItem,
@@ -26,6 +27,7 @@ interface RightRailProps {
     activeToolNames: string[];
     onPin: (item: AttachedContextItem) => void;
     onUnpin: (id: string) => void;
+    onSendDraft: (draftId: string) => Promise<void>;
     formatDateTime: (iso: string) => string;
     truncateWithEllipsis: (text: string, maxLength: number) => string;
 }
@@ -40,10 +42,29 @@ export function RightRail({
     activeToolNames,
     onPin,
     onUnpin,
+    onSendDraft,
     formatDateTime,
     truncateWithEllipsis,
 }: RightRailProps) {
+    const [confirmingDraftId, setConfirmingDraftId] = useState<string | null>(null);
+    const [sendingDraftId, setSendingDraftId] = useState<string | null>(null);
+
     const isPinned = (id: string) => pinnedContext.some((c) => c.id === id);
+
+    async function handleSendDraft(draftId: string) {
+        if (sendingDraftId) return;
+        if (confirmingDraftId !== draftId) {
+            setConfirmingDraftId(draftId);
+            return;
+        }
+        setSendingDraftId(draftId);
+        setConfirmingDraftId(null);
+        try {
+            await onSendDraft(draftId);
+        } finally {
+            setSendingDraftId(null);
+        }
+    }
 
     const calendarActive = activeToolNames.some((t) =>
         ["calendar_upcoming", "calendar_create"].includes(t)
@@ -77,9 +98,20 @@ export function RightRail({
                                                     {formatDateTime(event.startIso).replace(/,.*$/, "").trim()}
                                                 </span>
                                             ) : null}
-                                            <span className={styles.railItemTitle}>
-                                                {truncateWithEllipsis(event.summary, 40)}
-                                            </span>
+                                            {event.htmlLink ? (
+                                                <a
+                                                    href={event.htmlLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className={styles.railItemTitleLink}
+                                                >
+                                                    {truncateWithEllipsis(event.summary, 40)}
+                                                </a>
+                                            ) : (
+                                                <span className={styles.railItemTitle}>
+                                                    {truncateWithEllipsis(event.summary, 40)}
+                                                </span>
+                                            )}
                                         </div>
                                         <button
                                             type="button"
@@ -166,6 +198,8 @@ export function RightRail({
                     <ul className={styles.railList}>
                         {recentDrafts.slice(0, 4).map((draft) => {
                             const pinned = isPinned(draft.id);
+                            const isSending = sendingDraftId === draft.id;
+                            const isConfirming = confirmingDraftId === draft.id;
                             return (
                                 <li key={draft.id} className={styles.railItem}>
                                     <div className={styles.railItemHead}>
@@ -177,23 +211,33 @@ export function RightRail({
                                                 To: {truncateWithEllipsis(draft.to, 28)}
                                             </span>
                                         </div>
-                                        <button
-                                            type="button"
-                                            className={pinned ? styles.railPinButtonActive : styles.railPinButton}
-                                            onClick={() =>
-                                                pinned
-                                                    ? onUnpin(draft.id)
-                                                    : onPin({
-                                                        type: "email",
-                                                        id: draft.id,
-                                                        title: draft.subject,
-                                                        snippet: draft.snippet,
-                                                        meta: { from: draft.to },
-                                                    })
-                                            }
-                                        >
-                                            {pinned ? "✕" : "+ pin"}
-                                        </button>
+                                        <div className={styles.railItemActions}>
+                                            <button
+                                                type="button"
+                                                className={isConfirming ? styles.railSendButtonConfirm : styles.railSendButton}
+                                                onClick={() => void handleSendDraft(draft.id)}
+                                                disabled={isSending}
+                                            >
+                                                {isSending ? "Sending…" : isConfirming ? "Confirm send?" : "Send"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={pinned ? styles.railPinButtonActive : styles.railPinButton}
+                                                onClick={() =>
+                                                    pinned
+                                                        ? onUnpin(draft.id)
+                                                        : onPin({
+                                                            type: "email",
+                                                            id: draft.id,
+                                                            title: draft.subject,
+                                                            snippet: draft.snippet,
+                                                            meta: { from: draft.to },
+                                                        })
+                                                }
+                                            >
+                                                {pinned ? "✕" : "+ pin"}
+                                            </button>
+                                        </div>
                                     </div>
                                 </li>
                             );

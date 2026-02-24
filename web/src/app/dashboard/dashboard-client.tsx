@@ -2126,6 +2126,18 @@ export function DashboardClient({ user }: DashboardClientProps) {
               activeToolNames={isSubmittingRun ? thinkingSteps.map((s) => s.toolName) : []}
               onPin={(item) => setPinnedContext((prev) => [...prev, item])}
               onUnpin={(id) => setPinnedContext((prev) => prev.filter((c) => c.id !== id))}
+              onSendDraft={async (draftId) => {
+                const res = await fetch("/api/tools/gmail/drafts/send", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ draftId }),
+                });
+                if (!res.ok) {
+                  const body = await res.json().catch(() => null) as { error?: string } | null;
+                  throw new Error(body?.error ?? "Failed to send draft.");
+                }
+                void handleRefreshWorkspace();
+              }}
               formatDateTime={formatDateTime}
               truncateWithEllipsis={truncateWithEllipsis}
             />

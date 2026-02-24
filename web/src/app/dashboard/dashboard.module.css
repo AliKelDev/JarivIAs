@@ -1659,6 +1659,58 @@
   background: rgba(47, 111, 101, 0.18);
 }
 
+.railItemActions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.railItemTitleLink {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #1e3a50;
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+.railItemTitleLink:hover {
+  text-decoration: underline;
+  color: #255478;
+}
+
+.railSendButton {
+  flex-shrink: 0;
+  border: 1px solid rgba(180, 100, 30, 0.3);
+  background: transparent;
+  color: #8a4a10;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 0.18rem 0.4rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.railSendButton:hover {
+  background: rgba(180, 100, 30, 0.08);
+  border-color: rgba(180, 100, 30, 0.5);
+}
+
+.railSendButtonConfirm {
+  flex-shrink: 0;
+  border: 1px solid rgba(180, 100, 30, 0.6);
+  background: rgba(180, 100, 30, 0.1);
+  color: #7a3a05;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 0.18rem 0.4rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 /* highlight when Alik is reading that section */
 .railSectionHighlighted {
   background: rgba(47, 140, 126, 0.06);

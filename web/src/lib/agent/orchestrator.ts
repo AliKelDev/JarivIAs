@@ -411,7 +411,9 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
       limit: 30,
     });
 
+    const currentDateLine = `Today's date: ${new Date().toISOString().slice(0, 10)}.`;
     const systemInstructionParts = [
+      currentDateLine,
       userContext,
       attachedContextBlock,
       AGENT_SYSTEM_INSTRUCTION,
