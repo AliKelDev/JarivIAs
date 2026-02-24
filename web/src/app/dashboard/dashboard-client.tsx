@@ -1528,7 +1528,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
               </section>
             ) : null}
 
-            <section className={chatExpanded ? `${styles.panel} ${styles.panelChatExpanded}` : styles.panel}>
+            <section className={chatExpanded ? `${styles.panel} ${styles.panelChatFill} ${styles.panelChatExpanded}` : `${styles.panel} ${styles.panelChatFill}`}>
               <div className={styles.panelHeader}>
                 <h2 className={styles.panelTitle}>Alik</h2>
                 <div className={styles.buttonRow}>
@@ -1748,36 +1748,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
               ) : null}
             </section>
 
-            <section className={`${styles.panel} ${styles.heroPanel}`}>
-              <p className={styles.heroLead}>
-                Live context for your day, fast approvals, and one place to delegate to Alik.
-              </p>
-              <div className={styles.statGrid}>
-                <article className={styles.statCard}>
-                  <p className={styles.statLabel}>Google</p>
-                  <p className={styles.statValue}>
-                    {integration?.connected ? "Connected" : "Not connected"}
-                  </p>
-                </article>
-                <article className={styles.statCard}>
-                  <p className={styles.statLabel}>Upcoming Events</p>
-                  <p className={styles.statValue}>{upcomingEvents.length}</p>
-                </article>
-                <article className={styles.statCard}>
-                  <p className={styles.statLabel}>Latest Emails</p>
-                  <p className={styles.statValue}>{recentInboxMessages.length}</p>
-                </article>
-                <article className={styles.statCard}>
-                  <p className={styles.statLabel}>Pending Approvals</p>
-                  <p className={styles.statValue}>{agentPendingApproval ? 1 : 0}</p>
-                </article>
-                <article className={styles.statCard}>
-                  <p className={styles.statLabel}>Autonomy Mode</p>
-                  <p className={styles.statValue}>
-                    {formatTrustLevelLabel(agentTrustLevel)}
-                  </p>
-                </article>
-              </div>
+            <section className={styles.panel}>
               <div className={styles.trustPanel}>
                 <p className={styles.statLabel}>How much Alik can do on her own</p>
                 <div className={styles.trustLevelRow}>
@@ -1787,8 +1758,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
                       <button
                         key={option.value}
                         type="button"
-                        className={`${styles.trustLevelButton} ${isActive ? styles.trustLevelButtonActive : ""
-                          }`}
+                        className={`${styles.trustLevelButton} ${isActive ? styles.trustLevelButtonActive : ""}`}
                         disabled={agentTrustSubmitting || agentTrustLoading}
                         onClick={() => void setTrustLevel(option.value)}
                       >
@@ -1798,12 +1768,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
                     );
                   })}
                 </div>
-                {agentTrustLoading ? (
-                  <p className={styles.meta}>Loading autonomy mode...</p>
-                ) : null}
-                {agentTrustLevelSource ? (
-                  <p className={styles.meta}>Source: {agentTrustLevelSource}</p>
-                ) : null}
                 {agentTrustMessage ? <p className={styles.meta}>{agentTrustMessage}</p> : null}
                 {agentTrustError ? <p className={styles.error}>{agentTrustError}</p> : null}
               </div>
