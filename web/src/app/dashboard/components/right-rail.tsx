@@ -66,10 +66,10 @@ export function RightRail({
         }
     }
 
-    const calendarActive = activeToolNames.some((t) =>
+    const calendarActive = (activeToolNames ?? []).some((t) =>
         ["calendar_upcoming", "calendar_create"].includes(t)
     );
-    const inboxActive = activeToolNames.some((t) =>
+    const inboxActive = (activeToolNames ?? []).some((t) =>
         ["gmail_search", "gmail_recent", "gmail_reply", "gmail_send"].includes(t)
     );
 
