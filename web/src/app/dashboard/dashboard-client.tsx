@@ -213,6 +213,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<string | null>(null);
   const [briefingDismissed, setBriefingDismissed] = useState(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
+  const settingsOverlayRef = useRef<HTMLDivElement>(null);
 
   const [activityRuns, setActivityRuns] = useState<ActivityRun[]>([]);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -513,6 +514,35 @@ export function DashboardClient({ user }: DashboardClientProps) {
     }
   }, [agentMessages, streamingAssistantText]);
 
+  useEffect(() => {
+    if (!showSettings) {
+      return;
+    }
+
+    function handleDocumentMouseDown(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+
+      const targetElement = target as HTMLElement;
+      if (targetElement.closest("[data-settings-toggle='true']")) {
+        return;
+      }
+
+      if (settingsOverlayRef.current?.contains(target)) {
+        return;
+      }
+
+      setShowSettings(false);
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown);
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown);
+    };
+  }, [showSettings]);
+
   async function handleRequestGmailApproval() {
     setGmailSubmitting(true);
     setGmailError(null);
@@ -760,7 +790,8 @@ export function DashboardClient({ user }: DashboardClientProps) {
               agentThreadOpeningId={agentThreadOpeningId}
               onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: false })}
               onNewConversation={handleStartNewConversation}
-              onSettingsToggle={setShowSettings}
+              showSettings={showSettings}
+              onSettingsToggle={() => setShowSettings((value) => !value)}
               formatDateTime={formatDateTime}
               truncateWithEllipsis={truncateWithEllipsis}
             />
@@ -1090,84 +1121,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
               </section>
             ) : null}
 
-            {showSettings ? (<>
-            <GoogleWorkspaceIntegrationPanel
-              integrationLoading={integrationLoading}
-              workspaceLoading={workspaceLoading}
-              integrationError={integrationError}
-              integration={integration}
-              pulseReady={pulseReady}
-              onRefreshWorkspace={() => void handleRefreshWorkspace()}
-              formatScopeLabel={formatScopeLabel}
-            />
-
-            <ProfilePanel
-              profileLoading={profileLoading}
-              profileDisplayName={profileDisplayName}
-              profileRole={profileRole}
-              profileOrganization={profileOrganization}
-              profileTimezone={profileTimezone}
-              profileInterests={profileInterests}
-              profileProjects={profileProjects}
-              profileNotes={profileNotes}
-              profileSaving={profileSaving}
-              profileSaved={profileSaved}
-              profileError={profileError}
-              onChangeDisplayName={(value) => {
-                setProfileDisplayName(value);
-                setProfileSaved(false);
-              }}
-              onChangeRole={(value) => {
-                setProfileRole(value);
-                setProfileSaved(false);
-              }}
-              onChangeOrganization={(value) => {
-                setProfileOrganization(value);
-                setProfileSaved(false);
-              }}
-              onChangeTimezone={(value) => {
-                setProfileTimezone(value);
-                setProfileSaved(false);
-              }}
-              onChangeInterests={(value) => {
-                setProfileInterests(value);
-                setProfileSaved(false);
-              }}
-              onChangeProjects={(value) => {
-                setProfileProjects(value);
-                setProfileSaved(false);
-              }}
-              onChangeNotes={(value) => {
-                setProfileNotes(value);
-                setProfileSaved(false);
-              }}
-              onSaveProfile={() => void handleSaveProfile()}
-            />
-
-            <SlackIntegrationPanel
-              slackToken={slackToken}
-              slackHasToken={slackHasToken}
-              slackChecking={slackChecking}
-              slackSaving={slackSaving}
-              slackSaved={slackSaved}
-              slackError={slackError}
-              onChangeSlackToken={(value) => {
-                setSlackToken(value);
-                setSlackSaved(false);
-              }}
-              onSaveSlackToken={() => void handleSaveSlackToken()}
-            />
-
-            <MemoryPanel
-              memoryLoading={memoryLoading}
-              memoryError={memoryError}
-              memoryEntries={memoryEntries}
-              memoryDeletingId={memoryDeletingId}
-              onRefreshMemory={() => void refreshMemory()}
-              onDeleteMemoryEntry={(id) => void handleDeleteMemoryEntry(id)}
-            />
-            </>) : null}
-
             <RecentActivityPanel
               activityRuns={activityRuns}
               activityLoading={activityLoading}
@@ -1211,6 +1164,108 @@ export function DashboardClient({ user }: DashboardClientProps) {
           </div>
 
         </div>
+        {showSettings ? (
+          <div
+            className={styles.settingsOverlayBackdrop}
+            onClick={() => setShowSettings(false)}
+            role="presentation"
+          >
+            <div
+              ref={settingsOverlayRef}
+              className={styles.settingsOverlayPanel}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={styles.settingsOverlayHeader}>
+                <h3 className={styles.settingsOverlayTitle}>Settings</h3>
+                <button
+                  type="button"
+                  className={styles.settingsOverlayClose}
+                  onClick={() => setShowSettings(false)}
+                  aria-label="Close settings"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className={styles.settingsOverlayContent}>
+                <GoogleWorkspaceIntegrationPanel
+                  integrationLoading={integrationLoading}
+                  workspaceLoading={workspaceLoading}
+                  integrationError={integrationError}
+                  integration={integration}
+                  pulseReady={pulseReady}
+                  onRefreshWorkspace={() => void handleRefreshWorkspace()}
+                  formatScopeLabel={formatScopeLabel}
+                />
+
+                <ProfilePanel
+                  profileLoading={profileLoading}
+                  profileDisplayName={profileDisplayName}
+                  profileRole={profileRole}
+                  profileOrganization={profileOrganization}
+                  profileTimezone={profileTimezone}
+                  profileInterests={profileInterests}
+                  profileProjects={profileProjects}
+                  profileNotes={profileNotes}
+                  profileSaving={profileSaving}
+                  profileSaved={profileSaved}
+                  profileError={profileError}
+                  onChangeDisplayName={(value) => {
+                    setProfileDisplayName(value);
+                    setProfileSaved(false);
+                  }}
+                  onChangeRole={(value) => {
+                    setProfileRole(value);
+                    setProfileSaved(false);
+                  }}
+                  onChangeOrganization={(value) => {
+                    setProfileOrganization(value);
+                    setProfileSaved(false);
+                  }}
+                  onChangeTimezone={(value) => {
+                    setProfileTimezone(value);
+                    setProfileSaved(false);
+                  }}
+                  onChangeInterests={(value) => {
+                    setProfileInterests(value);
+                    setProfileSaved(false);
+                  }}
+                  onChangeProjects={(value) => {
+                    setProfileProjects(value);
+                    setProfileSaved(false);
+                  }}
+                  onChangeNotes={(value) => {
+                    setProfileNotes(value);
+                    setProfileSaved(false);
+                  }}
+                  onSaveProfile={() => void handleSaveProfile()}
+                />
+
+                <SlackIntegrationPanel
+                  slackToken={slackToken}
+                  slackHasToken={slackHasToken}
+                  slackChecking={slackChecking}
+                  slackSaving={slackSaving}
+                  slackSaved={slackSaved}
+                  slackError={slackError}
+                  onChangeSlackToken={(value) => {
+                    setSlackToken(value);
+                    setSlackSaved(false);
+                  }}
+                  onSaveSlackToken={() => void handleSaveSlackToken()}
+                />
+
+                <MemoryPanel
+                  memoryLoading={memoryLoading}
+                  memoryError={memoryError}
+                  memoryEntries={memoryEntries}
+                  memoryDeletingId={memoryDeletingId}
+                  onRefreshMemory={() => void refreshMemory()}
+                  onDeleteMemoryEntry={(id) => void handleDeleteMemoryEntry(id)}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );
