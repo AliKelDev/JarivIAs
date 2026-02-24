@@ -1,6 +1,6 @@
 # Gemini Execution Checklist
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 Use this checklist when setting up a new environment or validating production after runtime changes.
 
@@ -36,7 +36,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 ## 3. Core Runtime Verification
 
 - [ ] `POST /api/agent/run` returns valid payload.
-- [ ] `POST /api/agent/run/stream` emits `status`, `delta`, and `result` events.
+- [ ] `POST /api/agent/run/stream` emits `status`, `delta`, `thought_delta`, `tool_call`, and `result` events.
 - [ ] Run records are written to `runs/*`.
 - [ ] Action records are written to `runs/{runId}/actions/*`.
 - [ ] Thread messages persist and reload correctly.
@@ -51,8 +51,10 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 ## 5. Tool Verification
 
 - [ ] `gmail_draft_create`
+- [ ] `gmail_search`
 - [ ] `gmail_send`
 - [ ] `gmail_thread_read`
+- [ ] `gmail_reply`
 - [ ] `calendar_event_create`
 - [ ] `calendar_event_update`
 - [ ] `calendar_search`
@@ -83,4 +85,4 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

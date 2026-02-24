@@ -129,6 +129,44 @@ Ship Slack read support using user-provided token in settings before Slack OAuth
 
 Revisit once external user adoption requires managed OAuth onboarding.
 
+## 2026-02-24: Three-Column Dashboard as Default Operating Layout
+
+### Decision
+
+Keep the dashboard in a fixed-height three-column shell:
+- left: identity, service chips, thread list
+- center: action feed + inline approval cards + composer
+- right: compact calendar/inbox/drafts rail with pin/send interactions
+
+### Why
+
+- Makes agent actions, approvals, and workspace context visible at the same time.
+- Reduces modal/context switching for high-frequency review-and-approve workflows.
+
+### Revisit Conditions
+
+Revisit if:
+1. Telemetry shows poor task completion due to layout density.
+2. Mobile usage patterns require a different default information hierarchy.
+
+## 2026-02-24: Explicit File-Boundary and Path-Scoped Staging Protocol
+
+### Decision
+
+In multi-agent mode, require:
+- pre-claim exact file boundaries,
+- hard-stop on non-owned modified files before staging,
+- path-scoped staging (`git add <explicit paths only>`).
+
+### Why
+
+- Prevents silent overlap and accidental staging of unrelated concurrent work.
+- Keeps commits auditably single-scope on a shared branch.
+
+### Revisit Conditions
+
+Revisit if/when workflow moves from shared-branch development to short-lived per-agent branches.
+
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

@@ -5,6 +5,7 @@ This is the fastest path to understand and run the portal safely.
 ## 1. Ground Rules
 
 - Read `docs/AGENTS.md` before claiming work.
+- Follow `docs/AGENTS.md` Team Rules (file-boundary claim, non-owned-file hard stop, path-scoped staging).
 - Do not overlap claimed tasks without coordination.
 - Never commit secrets or OAuth tokens.
 - Keep docs updated when behavior changes.
@@ -33,6 +34,8 @@ Fill required values in `web/.env.local`:
 - `NEXT_PUBLIC_FIREBASE_API_KEY`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
 
+`web/.env.example` already contains project defaults for the remaining Firebase/Vertex values.
+
 Optional local-only overrides:
 - `GEMINI_MODEL` (default `gemini-2.5-flash`)
 - `AGENT_MAX_LOOP_STEPS` (default `8`, clamped `1..15`)
@@ -57,11 +60,13 @@ Open:
 1. Sign in and ensure dashboard loads.
 2. Confirm Google integration status shows connected.
 3. Send a chat prompt and verify streaming text appears.
-4. Trigger a side-effect tool path and verify approval card appears.
-5. Approve once and confirm run completes.
-6. Check Workspace Pulse loads calendar/inbox data.
-7. Check memory panel loads and delete action works.
-8. Check history panel loads thread list pagination.
+4. Verify thought/tool-call stream events appear while Alik plans.
+5. Trigger a side-effect tool path and verify approval card appears.
+6. Approve once and confirm run completes.
+7. Check Workspace Pulse loads calendar/inbox data.
+8. Check memory panel loads and delete action works.
+9. Check history panel loads thread list pagination.
+10. Check right rail draft send confirm flow works and refreshes workspace.
 
 ## 5. Important Runtime Surfaces
 
@@ -89,6 +94,12 @@ Memory and trust:
 
 UI:
 - `web/src/app/dashboard/dashboard-client.tsx`
+- `web/src/app/dashboard/components/left-sidebar.tsx`
+- `web/src/app/dashboard/components/right-rail.tsx`
+- `web/src/app/dashboard/hooks/use-chat-runner.ts`
+- `web/src/app/dashboard/hooks/use-workspace-data.ts`
+- `web/src/app/dashboard/hooks/use-agent-trust.ts`
+- `web/src/app/dashboard/hooks/use-thread-history.ts`
 - `web/src/app/onboarding/onboarding-client.tsx`
 
 ## 6. Firestore + Indexes
@@ -118,4 +129,4 @@ firebase deploy --only firestore:indexes
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

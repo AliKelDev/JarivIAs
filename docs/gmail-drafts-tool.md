@@ -1,13 +1,14 @@
 # Gmail Drafts Tool Spec
 
-Author: Claude (Sonnet 4.6)
-Last updated: 2026-02-23
+Author: Claude (Sonnet 4.6), updated by Codex (GPT-5)
+Last updated: 2026-02-24
 
-Related checklist item: `execution-playbook.md` Phase 2 — `gmail_draft_create`
+Related checklist item: `docs/gemini-execution-checklist.md` tool verification for `gmail_draft_create`
 
-Implementation status (2026-02-23):
+Implementation status (2026-02-24):
 - Implemented in runtime and tool registry.
-- Dashboard includes recent drafts panel and send-draft action flow.
+- Dashboard right rail includes recent drafts + confirm-send flow.
+- OAuth scope set includes `https://www.googleapis.com/auth/gmail.compose`.
 
 ---
 
@@ -16,42 +17,35 @@ Implementation status (2026-02-23):
 `gmail_draft_create` lets Alik compose a draft email in the user's Gmail without sending it. This
 is the preferred action when:
 
-- The user hasn't explicitly said "send"
-- The content is sensitive or complex and benefits from review
-- Alik is acting proactively (the user hasn't asked, but Alik thinks a reply is warranted)
-- The user's trust level for the recipient doesn't yet permit auto-send
+- The user has not explicitly asked to send.
+- The content is sensitive/complex and should be reviewed.
+- Alik is acting proactively and confidence is not high enough for a send.
+- Trust/policy settings would require approval for send anyway.
 
-A draft is a non-destructive, reversible action — the user retains full control before anything
-reaches the recipient.
+Drafts are non-destructive and keep user control before anything reaches a recipient.
 
 ---
 
 ## 2. OAuth Scope
 
-The existing Gmail OAuth flow requests:
+The Google OAuth scope list currently includes:
 - `https://www.googleapis.com/auth/gmail.send`
 - `https://www.googleapis.com/auth/gmail.readonly`
-
-Creating drafts requires adding:
 - `https://www.googleapis.com/auth/gmail.compose`
 
-`gmail.compose` grants: create, read, update, and delete drafts + send messages. It does NOT grant
-access to read existing messages (that's `gmail.readonly`). Adding this scope is additive — it does
-not remove any existing access.
+`gmail.compose` is required for draft create/list/send workflows.
 
-**Action required:** Add `gmail.compose` to the OAuth scope list in `lib/google/oauth.ts` and
-update the OAuth consent screen in GCP.
-
-Note: Users who have already granted OAuth access will need to re-authorize to pick up the new
-scope. Plan a re-auth prompt in the integration health check UI.
+If scopes are changed in the future, users may need to reconnect Google to grant new permissions.
 
 ---
 
 ## 3. Gmail API Call
 
-Endpoint: `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts`
+Create draft endpoint:
+- `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts`
 
 Request body:
+
 ```json
 {
   "message": {
@@ -61,7 +55,8 @@ Request body:
 ```
 
 The RFC 2822 message format:
-```
+
+```text
 From: me
 To: recipient@example.com
 Subject: Hello
@@ -79,44 +74,23 @@ This must be encoded as base64url (not standard base64).
 ```ts
 const gmailDraftCreate: ToolDefinition<GmailDraftArgs> = {
   name: "gmail_draft_create",
-  description:
-    "Creates a draft email in the user's Gmail inbox. Use this when composing a message " +
-    "that the user should review before sending, or when auto-send is not appropriate.",
-  sideEffect: false,   // Does not affect any external recipient — draft stays in Gmail
+  sideEffect: false,
   defaultApproval: "not_required",
   inputSchema: {
     type: "object",
     properties: {
-      to: {
-        type: "string",
-        description: "Recipient email address"
-      },
-      subject: {
-        type: "string",
-        description: "Email subject line"
-      },
-      body: {
-        type: "string",
-        description: "Plain text email body"
-      },
-      replyToMessageId: {
-        type: "string",
-        description: "Optional Gmail message ID to thread this draft as a reply to"
-      }
+      to: { type: "string" },
+      subject: { type: "string" },
+      bodyText: { type: "string" }
     },
-    required: ["to", "subject", "body"]
-  },
-  execute: async (ctx, args) => {
-    // Build RFC 2822 message, base64url-encode, POST to Gmail drafts API
-    // Return { draftId, subject, to, previewUrl }
+    required: ["to", "subject", "bodyText"]
   }
 };
 
 type GmailDraftArgs = {
   to: string;
   subject: string;
-  body: string;
-  replyToMessageId?: string;
+  bodyText: string;
 };
 ```
 
@@ -124,10 +98,10 @@ type GmailDraftArgs = {
 
 ## 5. Policy Decision
 
-`sideEffect: false` — a draft is private to the user's mailbox and never reaches the recipient.
+`sideEffect: false` for this tool. A draft does not contact any recipient.
 
-Policy engine should always `allow` this tool without approval. This makes `gmail_draft_create`
-the low-friction path Alik defaults to unless the user or context explicitly asks to send.
+Policy should allow draft creation without approval. This makes drafting the safe default when
+send intent is ambiguous.
 
 ---
 
@@ -140,11 +114,11 @@ On success, return:
   draftId: string;
   subject: string;
   to: string;
-  gmailLink: string;   // https://mail.google.com/mail/#drafts/<draftId>
+  gmailLink: string; // https://mail.google.com/mail/#drafts/<draftId>
 }
 ```
 
-The UI should render this as a card: "Draft created — [subject] to [to]. Open in Gmail →"
+UI renders this as an action/result card and refreshes right-rail drafts.
 
 ---
 
@@ -158,27 +132,24 @@ The UI should render this as a card: "Draft created — [subject] to [to]. Open 
 | Trust level needed | None | Allowlist or explicit approval |
 | Reversible | Yes (user can delete) | No |
 
-Alik should prefer drafts when in doubt. The prompt to Gemini should make this explicit:
-"If the user wants a message written but has not clearly said to send it, create a draft."
+Alik should prefer drafts when in doubt.
 
 ---
 
-## 8. Implementation Path
+## 8. Current Implementation Map
 
-1. Add `gmail.compose` to OAuth scopes in `lib/google/oauth.ts`
-2. Add `buildRfc2822Message(args)` helper to `lib/tools/gmail.ts`
-3. Add `createDraft(client, raw)` function using `gmail.users.drafts.create`
-4. Register `gmail_draft_create` tool in `lib/agent/tool-registry.ts`
-5. Update system prompt to prefer drafts over sends when intent is ambiguous
-6. Add draft confirmation card to dashboard UI
-7. Update OAuth consent screen in GCP console
-8. Test re-auth flow for existing users
+- OAuth scopes: `web/src/lib/google/oauth.ts`
+- Gmail helpers: `web/src/lib/tools/gmail.ts`
+- Tool declaration + validation: `web/src/lib/agent/tool-registry.ts`
+- Draft list API: `web/src/app/api/tools/gmail/drafts/route.ts`
+- Draft send API: `web/src/app/api/tools/gmail/drafts/send/route.ts`
+- Right rail draft UI/actions: `web/src/app/dashboard/components/right-rail.tsx`
+- Workspace data refresh flow: `web/src/app/dashboard/hooks/use-workspace-data.ts`
 
 ---
 
-## 9. Non-Goals (V1)
+## 9. Non-Goals (Current)
 
-- HTML email body (plain text only for now)
-- Attachment support
-- Draft editing/updating after creation
-- Draft listing or browsing
+- HTML email body support
+- Attachments
+- Draft editing/versioning workflows

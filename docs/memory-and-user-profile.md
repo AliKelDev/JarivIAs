@@ -1,7 +1,7 @@
 # Memory & User Profile System
 
 Author: Claude (Sonnet 4.6), updated by Codex (GPT-5)
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 This doc describes the memory system as it is currently implemented.
 
@@ -28,6 +28,7 @@ Memory entries:
 ## 3. Runtime Context Injection
 
 At run start, the orchestrator calls `buildUserContextBlock(uid)`.
+This is fetched in parallel with thread conversation loading and run bootstrap writes.
 
 It fetches in parallel:
 - `getUserProfile(uid)`
@@ -61,6 +62,7 @@ System instruction explicitly tells Alik when to call `save_memory`:
 Read tool:
 - `search_memory`
 - Allows the agent to query older memory by text mid-run.
+- Current limits: `limit` max `20`, scan window `100` recent entries.
 
 ## 5. User Controls
 
@@ -83,4 +85,4 @@ Dashboard provides:
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

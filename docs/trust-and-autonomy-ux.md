@@ -1,16 +1,18 @@
 # Trust & Autonomy UX
 
 Author: Claude (Sonnet 4.6)
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 Note: The technical approval/policy flow is documented in `gemini-agent-runtime-spec.md` and
 `execution-playbook.md`. This doc covers the product and UX philosophy layer — why it's designed
 the way it is, and how it should evolve with the user.
 
-Implementation status (2026-02-23):
+Implementation status (2026-02-24):
 - Trust levels are implemented (`supervised`, `delegated`, `autonomous`) and configurable via onboarding + dashboard.
 - Policy enforcement is active in `web/src/lib/agent/policy.ts`.
 - Trust settings are persisted under `users/{uid}/settings/agent_policy`.
+- Delegated-mode "always allow recipient" path is implemented through approval resolution.
+- Approval cards are rendered inline in the center action feed and mirrored in activity traces.
 
 ---
 

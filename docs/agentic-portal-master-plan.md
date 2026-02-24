@@ -1,6 +1,6 @@
 # Agentic Portal Master Plan
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 ## 1. Goal
 
@@ -11,7 +11,7 @@ Core outcomes:
 - Human control over side effects through trust levels + approvals.
 - Persistent context (threads, profile, memory) so the assistant improves over time.
 
-## 2. Current Build Snapshot (2026-02-23)
+## 2. Current Build Snapshot (2026-02-24)
 
 Shipped:
 - Landing page, login, onboarding, protected dashboard.
@@ -24,6 +24,8 @@ Shipped:
 - Memory panel + profile editing + trust-level controls.
 - Morning briefing stream + on-login prepare cache.
 - Slack read integration through user-provided token settings.
+- Phase 8 dashboard redesign: three-column shell, inline approval cards in feed, right-rail calendar/inbox/drafts with pin/send actions.
+- Ongoing dashboard refactor to isolate orchestration state in hooks (`use-chat-runner`, `use-workspace-data`, `use-agent-trust`, `use-thread-history` shipped).
 
 ## 3. Product Boundaries
 
@@ -90,6 +92,7 @@ Global kill switch:
 1. Reliability hardening:
    - idempotency and retry semantics for side-effect tools
    - richer error telemetry per run step
+   - continue reducing dashboard merge risk by splitting remaining panel/layout state from `dashboard-client.tsx`
 2. UX polish:
    - tighter thread browsing and activity filtering
    - improved action cards and undo affordances
@@ -102,4 +105,4 @@ Global kill switch:
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

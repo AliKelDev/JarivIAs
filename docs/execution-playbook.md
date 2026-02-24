@@ -1,6 +1,6 @@
 # Execution Playbook
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 This is the current operator runbook for implementing, validating, and shipping work.
 
@@ -20,6 +20,8 @@ This is the current operator runbook for implementing, validating, and shipping 
 git status --short
 ```
 
+If non-owned modified files exist, stop and coordinate in `docs/AGENTS.md` before staging.
+
 2. Run local checks before and after edits:
 
 ```bash
@@ -29,6 +31,11 @@ npm --prefix web run build
 
 3. Validate a real user flow in the dashboard.
 4. Update `docs/AGENTS.md` with implementation note if working in multi-agent mode.
+5. Stage only explicit owned paths:
+
+```bash
+git add <explicit-paths-only>
+```
 
 ## 3. Runtime Health Checklist
 
@@ -36,6 +43,7 @@ npm --prefix web run build
 - [x] Onboarding gating (`/onboarding`) before dashboard access.
 - [x] Gemini run route (`/api/agent/run`) operational.
 - [x] Streaming route (`/api/agent/run/stream`) operational.
+- [x] Stream emits `delta`, `thought_delta`, and `tool_call` events.
 - [x] Approval pause/resume flow operational.
 - [x] Thread history + message retrieval operational.
 - [x] Activity panel query operational.
@@ -60,6 +68,12 @@ Client-facing env (still required at runtime/build):
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+
+Server runtime config:
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_GENAI_USE_VERTEXAI`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 
 Server secrets:
 - `GOOGLE_OAUTH_CLIENT_SECRET`
@@ -117,4 +131,4 @@ Do not treat this file as a task board.
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

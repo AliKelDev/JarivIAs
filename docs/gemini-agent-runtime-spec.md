@@ -1,6 +1,6 @@
 # Gemini Agent Runtime Spec
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 This document defines the current runtime contract for agent execution routes.
 
@@ -22,7 +22,7 @@ Both routes require authenticated Firebase session cookies.
   ],
   "attachedContext": [
     {
-      "type": "email | calendar_event",
+      "type": "email | calendar_event | briefing",
       "id": "string",
       "title": "string (optional)",
       "snippet": "string (optional)",
@@ -33,8 +33,12 @@ Both routes require authenticated Firebase session cookies.
 ```
 
 Normalization:
-- `conversation` is sanitized and bounded.
-- `attachedContext` is sanitized and capped.
+- Route-level input sanitation:
+  - `conversation` bounded to `40`
+  - `attachedContext` bounded to `12`
+- Runtime planning sanitation:
+  - conversation context bounded to `30` messages for model planning
+  - attached context still bounded to `12`
 
 ## 3. Non-Streaming Response Shape
 
@@ -46,7 +50,7 @@ Normalization:
   "threadId": "string",
   "status": "completed | awaiting_confirmation | failed",
   "summary": "string",
-  "mode": "assistant_text | tool_call | approval_required",
+  "mode": "assistant_text | tool_executed | requires_approval",
   "model": "string",
   "tool": "string (optional)",
   "toolArgs": { "...": "json" },
@@ -64,6 +68,8 @@ Normalization:
 
 - `{"type":"status","status":"planning","threadId":"..."}`
 - repeated `{"type":"delta","delta":"..."}`
+- repeated `{"type":"thought_delta","delta":"..."}`
+- repeated `{"type":"tool_call","toolName":"...","preview":"..."}`
 - `{"type":"result","result":{...}}`
 - or `{"type":"error","error":"..."}`
 
@@ -90,7 +96,7 @@ Action states:
 ## 6. Core Execution Loop
 
 1. Authenticate user and ensure thread ownership.
-2. Persist prompt + run bootstrap state.
+2. Bootstrap run state in Firestore and persist user message.
 3. Build run-level system instruction:
    - persona + reliability rules
    - `[ABOUT THE USER]` memory/profile block
@@ -100,7 +106,7 @@ Action states:
    - validate args
    - evaluate policy
    - if approval required, persist pending action and return
-   - else execute tool, persist result, append context back into planner loop
+   - else execute tool, persist result, append execution context back into planner loop
 6. Continue loop until final assistant text, approval stop, failure, or max step limit.
 
 Loop limit:
@@ -110,8 +116,10 @@ Loop limit:
 ## 7. Tool Set (Current)
 
 - `gmail_draft_create`
-- `gmail_send`
+- `gmail_search`
 - `gmail_thread_read`
+- `gmail_reply`
+- `gmail_send`
 - `calendar_event_create`
 - `calendar_event_update`
 - `calendar_search`
@@ -122,13 +130,13 @@ Loop limit:
 
 ## 8. Policy Rules (Current)
 
-Trust-level based policy in `lib/agent/policy.ts`:
+Trust-level based policy in `web/src/lib/agent/policy.ts`:
 - `supervised`: all side effects require approval.
 - `delegated`: side effects require approval except allowlisted Gmail recipients.
 - `autonomous`: side effects allowed.
 
 Global override:
-- `AGENT_SIDE_EFFECTS_ENABLED=false` => deny all side-effect tools.
+- `AGENT_SIDE_EFFECTS_ENABLED=false` denies all side-effect tools.
 
 ## 9. Data Persistence
 
@@ -137,15 +145,16 @@ Primary write targets:
 - `runs/{runId}/actions/{actionId}`
 - `threads/{threadId}` and message subcollection
 - `users/{uid}/agentApprovals/{approvalId}`
-- `audit/{auditId}` for side-effect events
+- `audit/{auditId}` for side-effect and approval events
 
 ## 10. Failure and Safety Guarantees
 
-- Invalid tool args fail fast with explicit error.
-- Missing integration credentials return safe user-facing errors.
-- Memory context failures do not block a run.
-- Streaming errors emit `error` event and close stream cleanly.
+- Invalid tool args fail fast with explicit errors.
+- Unknown tool names fail safely and terminate the run.
+- Missing integration credentials return user-facing errors without silent success.
+- Memory/profile context read failures do not block the run.
+- Streaming errors emit an `error` event and close cleanly.
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24

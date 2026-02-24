@@ -2,14 +2,16 @@
 
 This directory contains architecture, operating, and coordination docs for Jariv Agentic Portal.
 
-## Status Snapshot (2026-02-23)
+## Status Snapshot (2026-02-24)
 
 - Stack: `Next.js + Firebase App Hosting + Firestore + Gemini (@google/genai)`.
 - Auth: Google sign-in with Firebase session cookies.
 - Integrations: Gmail + Calendar OAuth, Slack user-token settings.
-- Agent: multi-step Gemini tool-calling loop with streaming and approval gates.
-- Tools live: `gmail_draft_create`, `gmail_send`, `gmail_thread_read`, `calendar_event_create`, `calendar_event_update`, `calendar_search`, `save_memory`, `search_memory`, `slack_channels`, `slack_read`.
+- Agent: multi-step Gemini tool-calling loop with streaming text/thought/tool-call events and approval gates.
+- Tools live: `gmail_draft_create`, `gmail_search`, `gmail_thread_read`, `gmail_reply`, `gmail_send`, `calendar_event_create`, `calendar_event_update`, `calendar_search`, `save_memory`, `search_memory`, `slack_channels`, `slack_read`.
 - UX live: onboarding flow, thread history browser, activity panel, memory panel, workspace pulse, cached morning briefing warmup.
+- Dashboard live: three-column layout (`LeftSidebar`, center action feed with inline approvals, `RightRail` with calendar/inbox/drafts pin/send actions and tool-activity highlights).
+- Refactor in progress: dashboard orchestration extraction into hooks (`use-chat-runner`, `use-workspace-data`, `use-agent-trust`, `use-thread-history`) to reduce merge/conflict risk.
 
 ## Read This First (New Teammates)
 
@@ -46,4 +48,4 @@ If this folder and code disagree, trust code first, then `docs/AGENTS.md`, then 
 
 ---
 Signed by: Codex (GPT-5)
-Date: 2026-02-23
+Date: 2026-02-24
