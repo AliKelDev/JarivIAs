@@ -26,12 +26,10 @@ import { DashboardHeader } from "./components/dashboard-header";
 import { GoogleWorkspaceIntegrationPanel } from "./components/google-workspace-integration-panel";
 import { LeftSidebar } from "./components/left-sidebar";
 import { MemoryPanel } from "./components/memory-panel";
-import { PastConversationsPanel } from "./components/past-conversations-panel";
 import { ProfilePanel } from "./components/profile-panel";
 import { RecentActivityPanel } from "./components/recent-activity-panel";
 import { RightRail } from "./components/right-rail";
 import { SlackIntegrationPanel } from "./components/slack-integration-panel";
-import { WorkspacePulsePanel } from "./components/workspace-pulse-panel";
 import { useAgentTrust } from "./hooks/use-agent-trust";
 import { useChatRunner } from "./hooks/use-chat-runner";
 import { useThreadHistory } from "./hooks/use-thread-history";
@@ -254,6 +252,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [draftConfirmId, setDraftConfirmId] = useState<string | null>(null);
 
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [briefingPreparing, setBriefingPreparing] = useState(false);
   const [preparedBriefingSummary, setPreparedBriefingSummary] = useState<string | null>(null);
   const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<string | null>(null);
@@ -982,6 +981,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
               agentThreadOpeningId={agentThreadOpeningId}
               onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: false })}
               onNewConversation={handleStartNewConversation}
+              onSettingsToggle={setShowSettings}
               formatDateTime={formatDateTime}
               truncateWithEllipsis={truncateWithEllipsis}
             />
@@ -1311,6 +1311,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
               </section>
             ) : null}
 
+            {showSettings ? (<>
             <GoogleWorkspaceIntegrationPanel
               integrationLoading={integrationLoading}
               workspaceLoading={workspaceLoading}
@@ -1386,77 +1387,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
               onRefreshMemory={() => void refreshMemory()}
               onDeleteMemoryEntry={(id) => void handleDeleteMemoryEntry(id)}
             />
-
-            <WorkspacePulsePanel
-              integrationConnected={Boolean(integration?.connected)}
-              integrationLoading={integrationLoading}
-              workspaceLoading={workspaceLoading}
-              workspaceError={workspaceError}
-              workspaceRefreshedAt={workspaceRefreshedAt}
-              upcomingEvents={upcomingEvents}
-              recentInboxMessages={recentInboxMessages}
-              recentDrafts={recentDrafts}
-              pinnedContext={pinnedContext}
-              expandedCalendarDescriptions={expandedCalendarDescriptions}
-              draftSendLoadingId={draftSendLoadingId}
-              draftConfirmId={draftConfirmId}
-              onRefreshWorkspace={() => void handleRefreshWorkspace()}
-              onToggleCalendarDescription={(eventKey) =>
-                setExpandedCalendarDescriptions((previous) => ({
-                  ...previous,
-                  [eventKey]: !previous[eventKey],
-                }))
-              }
-              onPinCalendarEvent={(event) =>
-                setPinnedContext((prev) => [
-                  ...prev,
-                  {
-                    type: "calendar_event",
-                    id: event.id ?? `event-${event.startIso}`,
-                    title: event.summary,
-                    snippet: event.description ?? undefined,
-                    meta: {
-                      startIso: event.startIso,
-                      endIso: event.endIso,
-                      location: event.location,
-                    },
-                  },
-                ])
-              }
-              onPinInboxMessage={(message) =>
-                setPinnedContext((prev) => [
-                  ...prev,
-                  {
-                    type: "email",
-                    id: message.id,
-                    title: message.subject,
-                    snippet: message.snippet,
-                    meta: { from: message.from },
-                  },
-                ])
-              }
-              onUnpinContextById={(id) =>
-                setPinnedContext((prev) => prev.filter((context) => context.id !== id))
-              }
-              onSendDraft={(draftId) => void handleSendDraft(draftId)}
-              formatDateTime={formatDateTime}
-              truncateWithEllipsis={truncateWithEllipsis}
-              buildCalendarEventKey={buildCalendarEventKey}
-            />
-
-            <PastConversationsPanel
-              threads={threads}
-              threadsLoading={threadsLoading}
-              threadsError={threadsError}
-              threadsHasMore={threadsHasMore}
-              agentThreadId={agentThreadId}
-              agentThreadOpeningId={agentThreadOpeningId}
-              onRefresh={() => void refreshThreads()}
-              onLoadMore={() => void refreshThreads(threadsCursor)}
-              onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: true })}
-              formatDateTime={formatDateTime}
-              truncateWithEllipsis={truncateWithEllipsis}
-            />
+            </>) : null}
 
             <RecentActivityPanel
               activityRuns={activityRuns}
@@ -1469,143 +1400,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
               truncateWithEllipsis={truncateWithEllipsis}
               getRunStatusBadge={getRunStatusBadge}
             />
-
-            <div className={styles.toolsGrid}>
-              <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Manual Gmail Send</h2>
-                <input
-                  className={styles.input}
-                  placeholder="to@example.com"
-                  value={gmailTo}
-                  onChange={(event) => setGmailTo(event.target.value)}
-                />
-                <input
-                  className={styles.input}
-                  placeholder="Subject"
-                  value={gmailSubject}
-                  onChange={(event) => setGmailSubject(event.target.value)}
-                />
-                <textarea
-                  className={styles.textarea}
-                  value={gmailBody}
-                  onChange={(event) => setGmailBody(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className={styles.runButton}
-                  onClick={handleRequestGmailApproval}
-                  disabled={gmailSubmitting}
-                >
-                  {gmailSubmitting ? "Requesting..." : "Request send approval"}
-                </button>
-
-                {gmailPendingApproval ? (
-                  <div className={styles.approvalCard}>
-                    <p className={styles.approvalTitle}>Approval Required</p>
-                    <p className={styles.meta}>
-                      The agent wants to send an email to{" "}
-                      <strong>{gmailPendingApproval.to}</strong> with subject{" "}
-                      <strong>{gmailPendingApproval.subject}</strong>.
-                    </p>
-                    <pre className={styles.result}>{gmailPendingApproval.bodyPreview}</pre>
-                    <label className={styles.label}>
-                      If rejecting, what should change? (optional for now)
-                      <textarea
-                        className={styles.textarea}
-                        value={gmailDecisionFeedback}
-                        onChange={(event) => setGmailDecisionFeedback(event.target.value)}
-                        placeholder="e.g., change tone, add details, different recipient..."
-                      />
-                    </label>
-                    <div className={styles.buttonRow}>
-                      <button
-                        type="button"
-                        className={styles.dangerButton}
-                        onClick={() => void handleResolveGmailApproval("reject")}
-                        disabled={gmailDecisionSubmitting}
-                      >
-                        {gmailDecisionSubmitting ? "Working..." : "No"}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.runButton}
-                        onClick={() => void handleResolveGmailApproval("approve_once")}
-                        disabled={gmailDecisionSubmitting}
-                      >
-                        {gmailDecisionSubmitting ? "Working..." : "Yes"}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        onClick={() =>
-                          void handleResolveGmailApproval(
-                            "approve_and_always_allow_recipient",
-                          )
-                        }
-                        disabled={gmailDecisionSubmitting}
-                      >
-                        {gmailDecisionSubmitting
-                          ? "Working..."
-                          : "Yes and always allow for this recipient"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {gmailError ? <p className={styles.error}>{gmailError}</p> : null}
-                {gmailResult ? (
-                  <pre className={styles.result}>{JSON.stringify(gmailResult, null, 2)}</pre>
-                ) : null}
-              </section>
-
-              <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Manual Calendar Event</h2>
-                <input
-                  className={styles.input}
-                  placeholder="Summary"
-                  value={eventSummary}
-                  onChange={(event) => setEventSummary(event.target.value)}
-                />
-                <input
-                  className={styles.input}
-                  placeholder="Description"
-                  value={eventDescription}
-                  onChange={(event) => setEventDescription(event.target.value)}
-                />
-                <label className={styles.label}>
-                  Start
-                  <input
-                    className={styles.input}
-                    type="datetime-local"
-                    value={eventStartIso}
-                    onChange={(event) => setEventStartIso(event.target.value)}
-                  />
-                </label>
-                <label className={styles.label}>
-                  End
-                  <input
-                    className={styles.input}
-                    type="datetime-local"
-                    value={eventEndIso}
-                    onChange={(event) => setEventEndIso(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className={styles.runButton}
-                  onClick={handleCreateCalendarEvent}
-                  disabled={calendarSubmitting}
-                >
-                  {calendarSubmitting ? "Creating..." : "Create event"}
-                </button>
-                {calendarError ? <p className={styles.error}>{calendarError}</p> : null}
-                {calendarResult ? (
-                  <pre className={styles.result}>
-                    {JSON.stringify(calendarResult, null, 2)}
-                  </pre>
-                ) : null}
-              </section>
-            </div>
           </div>
 
           {/* Right column — Phase D */}
