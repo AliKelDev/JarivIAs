@@ -8,18 +8,11 @@ import type {
   ActivityRun,
   AgentTrustLevel,
   BriefingPrepareResponse,
-  CalendarUpcomingResponse,
   DashboardClientProps,
-  GmailDraftsResponse,
   GmailPendingApproval,
-  GmailRecentResponse,
-  GoogleIntegrationStatus,
   MemoryEntry,
-  RecentGmailDraftItem,
-  RecentInboxDigestItem,
   SlackSettingsResponse,
   ToolResult,
-  UpcomingCalendarDigestItem,
 } from "./types";
 import styles from "./dashboard.module.css";
 import { DashboardHeader } from "./components/dashboard-header";
@@ -33,6 +26,7 @@ import { SlackIntegrationPanel } from "./components/slack-integration-panel";
 import { useAgentTrust } from "./hooks/use-agent-trust";
 import { useChatRunner } from "./hooks/use-chat-runner";
 import { useThreadHistory } from "./hooks/use-thread-history";
+import { useWorkspaceData } from "./hooks/use-workspace-data";
 
 const AGENT_TRUST_LEVEL_OPTIONS: Array<{
   value: AgentTrustLevel;
@@ -55,27 +49,6 @@ const AGENT_TRUST_LEVEL_OPTIONS: Array<{
       summary: "Allow side-effect actions and report outcomes.",
     },
   ];
-
-function isCalendarUpcomingResponse(value: unknown): value is CalendarUpcomingResponse {
-  if (!value || typeof value !== "object" || !("events" in value)) {
-    return false;
-  }
-  return Array.isArray((value as CalendarUpcomingResponse).events);
-}
-
-function isGmailRecentResponse(value: unknown): value is GmailRecentResponse {
-  if (!value || typeof value !== "object" || !("messages" in value)) {
-    return false;
-  }
-  return Array.isArray((value as GmailRecentResponse).messages);
-}
-
-function isGmailDraftsResponse(value: unknown): value is GmailDraftsResponse {
-  if (!value || typeof value !== "object" || !("drafts" in value)) {
-    return false;
-  }
-  return Array.isArray((value as GmailDraftsResponse).drafts);
-}
 
 function isBriefingPrepareResponse(
   value: unknown,
@@ -180,13 +153,6 @@ function getRunStatusBadge(status: string): { label: string; variant: "done" | "
   }
 }
 
-function buildCalendarEventKey(event: UpcomingCalendarDigestItem): string {
-  return (
-    event.id ??
-    `${event.summary}-${event.startIso ?? "none"}-${event.endIso ?? "none"}`
-  );
-}
-
 function truncateWithEllipsis(value: string, limit: number): string {
   if (value.length <= limit) {
     return value;
@@ -228,28 +194,17 @@ export function DashboardClient({ user }: DashboardClientProps) {
     handleStartNewConversation,
   } = useChatRunner();
 
-  const [integrationLoading, setIntegrationLoading] = useState(true);
-  const [integrationError, setIntegrationError] = useState<string | null>(null);
-  const [integration, setIntegration] = useState<GoogleIntegrationStatus | null>(
-    null,
-  );
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingCalendarDigestItem[]>(
-    [],
-  );
-  const [recentInboxMessages, setRecentInboxMessages] = useState<
-    RecentInboxDigestItem[]
-  >([]);
-  const [recentDrafts, setRecentDrafts] = useState<RecentGmailDraftItem[]>([]);
-  const [workspaceRefreshedAt, setWorkspaceRefreshedAt] = useState<string | null>(
-    null,
-  );
-  const [expandedCalendarDescriptions, setExpandedCalendarDescriptions] =
-    useState<Record<string, boolean>>({});
-
-  const [draftSendLoadingId, setDraftSendLoadingId] = useState<string | null>(null);
-  const [draftConfirmId, setDraftConfirmId] = useState<string | null>(null);
+  const {
+    integrationLoading,
+    integrationError,
+    integration,
+    workspaceLoading,
+    upcomingEvents,
+    recentInboxMessages,
+    recentDrafts,
+    refreshWorkspaceSnapshot,
+    refreshWorkspaceData,
+  } = useWorkspaceData();
 
   const [chatExpanded, setChatExpanded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -334,136 +289,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
     refreshAgentTrustLevel,
     setTrustLevel,
   } = useAgentTrust({ formatTrustLevelLabel });
-
-  const refreshGoogleStatus = useCallback(
-    async (): Promise<GoogleIntegrationStatus | null> => {
-      setIntegrationLoading(true);
-      setIntegrationError(null);
-
-      try {
-        const response = await fetch("/api/integrations/google/status", {
-          cache: "no-store",
-        });
-        const body = (await response.json().catch(() => null)) as
-          | GoogleIntegrationStatus
-          | { error?: string }
-          | null;
-
-        if (!response.ok) {
-          const message =
-            body && "error" in body
-              ? body.error
-              : "Failed to fetch Google integration status.";
-          throw new Error(message || "Failed to fetch Google integration status.");
-        }
-
-        const nextStatus = body as GoogleIntegrationStatus;
-        setIntegration(nextStatus);
-        return nextStatus;
-      } catch (caughtError) {
-        const message =
-          caughtError instanceof Error
-            ? caughtError.message
-            : "Could not load integration status.";
-        setIntegrationError(message);
-        setIntegration(null);
-        return null;
-      } finally {
-        setIntegrationLoading(false);
-      }
-    },
-    [],
-  );
-
-  const refreshWorkspaceSnapshot = useCallback(async () => {
-    setWorkspaceLoading(true);
-    setWorkspaceError(null);
-
-    try {
-      const [calendarResponse, inboxResponse, draftsResponse] = await Promise.all([
-        fetch("/api/tools/calendar/upcoming?limit=8", { cache: "no-store" }),
-        fetch("/api/tools/gmail/recent?limit=8", { cache: "no-store" }),
-        fetch("/api/tools/gmail/drafts?limit=8", { cache: "no-store" }),
-      ]);
-
-      const [calendarBody, inboxBody, draftsBody] = await Promise.all([
-        (calendarResponse.json().catch(() => null)) as Promise<
-          CalendarUpcomingResponse | { error?: string } | null
-        >,
-        (inboxResponse.json().catch(() => null)) as Promise<
-          GmailRecentResponse | { error?: string } | null
-        >,
-        (draftsResponse.json().catch(() => null)) as Promise<
-          GmailDraftsResponse | { error?: string } | null
-        >,
-      ]);
-
-      if (calendarResponse.ok && isCalendarUpcomingResponse(calendarBody)) {
-        setUpcomingEvents(calendarBody.events);
-        setExpandedCalendarDescriptions((previous) => {
-          const next: Record<string, boolean> = {};
-          for (const event of calendarBody.events) {
-            const eventKey = buildCalendarEventKey(event);
-            if (previous[eventKey]) {
-              next[eventKey] = true;
-            }
-          }
-          return next;
-        });
-      } else {
-        setUpcomingEvents([]);
-        setExpandedCalendarDescriptions({});
-      }
-
-      if (inboxResponse.ok && isGmailRecentResponse(inboxBody)) {
-        setRecentInboxMessages(inboxBody.messages);
-      } else {
-        setRecentInboxMessages([]);
-      }
-
-      if (draftsResponse.ok && isGmailDraftsResponse(draftsBody)) {
-        setRecentDrafts(draftsBody.drafts);
-      } else {
-        setRecentDrafts([]);
-      }
-      setDraftConfirmId(null);
-      setDraftSendLoadingId(null);
-
-      const errors: string[] = [];
-      if (!calendarResponse.ok) {
-        errors.push(
-          readErrorMessage(calendarBody, "Calendar preview is currently unavailable."),
-        );
-      }
-      if (!inboxResponse.ok) {
-        errors.push(
-          readErrorMessage(inboxBody, "Inbox preview is currently unavailable."),
-        );
-      }
-      if (!draftsResponse.ok) {
-        errors.push(
-          readErrorMessage(draftsBody, "Drafts preview is currently unavailable."),
-        );
-      }
-      setWorkspaceError(errors.length > 0 ? errors.join(" ") : null);
-      setWorkspaceRefreshedAt(new Date().toISOString());
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load workspace snapshot.";
-      setUpcomingEvents([]);
-      setRecentInboxMessages([]);
-      setRecentDrafts([]);
-      setDraftConfirmId(null);
-      setDraftSendLoadingId(null);
-      setExpandedCalendarDescriptions({});
-      setWorkspaceError(message);
-      setWorkspaceRefreshedAt(new Date().toISOString());
-    } finally {
-      setWorkspaceLoading(false);
-    }
-  }, []);
 
   const loadProfile = useCallback(async () => {
     setProfileLoading(true);
@@ -631,23 +456,15 @@ export function DashboardClient({ user }: DashboardClientProps) {
   }, []);
 
   const handleRefreshWorkspace = useCallback(async () => {
-    const status = await refreshGoogleStatus();
+    const status = await refreshWorkspaceData();
     if (status?.connected) {
-      await refreshWorkspaceSnapshot();
       void prepareBriefing();
       return;
     }
-
-    setUpcomingEvents([]);
-    setRecentInboxMessages([]);
-    setRecentDrafts([]);
     setPreparedBriefingSummary(null);
     setPreparedBriefingDateKey(null);
     setBriefingDismissed(false);
-    setExpandedCalendarDescriptions({});
-    setWorkspaceError(null);
-    setWorkspaceRefreshedAt(null);
-  }, [prepareBriefing, refreshGoogleStatus, refreshWorkspaceSnapshot]);
+  }, [prepareBriefing, refreshWorkspaceData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -659,23 +476,17 @@ export function DashboardClient({ user }: DashboardClientProps) {
       void refreshMemory();
       void refreshActivity();
       void refreshThreads();
-      const status = await refreshGoogleStatus();
+      const status = await refreshWorkspaceData();
       if (cancelled) {
         return;
       }
 
       if (status?.connected) {
-        await refreshWorkspaceSnapshot();
         void prepareBriefing();
       } else {
-        setUpcomingEvents([]);
-        setRecentInboxMessages([]);
-        setRecentDrafts([]);
         setPreparedBriefingSummary(null);
         setPreparedBriefingDateKey(null);
         setBriefingDismissed(false);
-        setWorkspaceError(null);
-        setWorkspaceRefreshedAt(null);
       }
 
       void refreshAgentPendingApproval();
@@ -690,11 +501,10 @@ export function DashboardClient({ user }: DashboardClientProps) {
     refreshActivity,
     refreshAgentPendingApproval,
     refreshAgentTrustLevel,
-    refreshGoogleStatus,
     refreshMemory,
     prepareBriefing,
     refreshThreads,
-    refreshWorkspaceSnapshot,
+    refreshWorkspaceData,
   ]);
 
   useEffect(() => {
@@ -843,37 +653,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
       setCalendarError(message);
     } finally {
       setCalendarSubmitting(false);
-    }
-  }
-
-  async function handleSendDraft(draftId: string) {
-    if (draftConfirmId !== draftId) {
-      setDraftConfirmId(draftId);
-      return; // Wait for second click
-    }
-
-    setDraftSendLoadingId(draftId);
-
-    try {
-      const response = await fetch("/api/tools/gmail/drafts/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftId }),
-      });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(readErrorMessage(body, "Failed to send draft."));
-      }
-
-      setRecentDrafts((prev) => prev.filter((d) => d.id !== draftId));
-      setDraftConfirmId(null);
-    } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : "Failed to send draft.";
-      setWorkspaceError(message);
-      setDraftConfirmId(null);
-    } finally {
-      setDraftSendLoadingId(null);
     }
   }
 
