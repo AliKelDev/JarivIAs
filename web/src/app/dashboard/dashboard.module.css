@@ -1417,12 +1417,27 @@
   font-size: 1.1rem;
   color: #7a90a4;
   cursor: pointer;
-  transition: color 120ms ease;
+  transition: color 120ms ease, transform 200ms ease;
   padding: 0.25rem;
+  background: none;
+  border: none;
+  line-height: 1;
 }
 
 .sidebarSettingsIcon:hover {
   color: #2a5070;
+}
+
+.sidebarSettingsIconActive {
+  color: #1e6488;
+  transform: rotate(30deg);
+}
+
+.sidebarSettingsLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1e6488;
+  letter-spacing: 0.04em;
 }
 
 /* ── Center feed card types (Phase C) ──────────────────────── */

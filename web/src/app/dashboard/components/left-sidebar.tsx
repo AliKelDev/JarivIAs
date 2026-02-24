@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ThreadSummary } from "../types";
 import styles from "../dashboard.module.css";
 
@@ -20,6 +21,7 @@ interface LeftSidebarProps {
     agentThreadOpeningId: string | null;
     onOpenThread: (threadId: string) => void;
     onNewConversation: () => void;
+    onSettingsToggle: (open: boolean) => void;
     formatDateTime: (iso: string) => string;
     truncateWithEllipsis: (text: string, maxLength: number) => string;
 }
@@ -34,9 +36,17 @@ export function LeftSidebar({
     agentThreadOpeningId,
     onOpenThread,
     onNewConversation,
+    onSettingsToggle,
     formatDateTime,
     truncateWithEllipsis,
 }: LeftSidebarProps) {
+    const [showSettings, setShowSettings] = useState(false);
+
+    function handleGearClick() {
+        const next = !showSettings;
+        setShowSettings(next);
+        onSettingsToggle(next);
+    }
     const services: ServiceChip[] = [
         {
             name: "Gmail",
@@ -144,9 +154,17 @@ export function LeftSidebar({
 
             {/* Settings at bottom */}
             <div className={styles.sidebarFooter}>
-                <span className={styles.sidebarSettingsIcon} aria-label="Settings">
+                <button
+                    type="button"
+                    className={showSettings ? `${styles.sidebarSettingsIcon} ${styles.sidebarSettingsIconActive}` : styles.sidebarSettingsIcon}
+                    aria-label={showSettings ? "Close settings" : "Open settings"}
+                    onClick={handleGearClick}
+                >
                     ⚙
-                </span>
+                </button>
+                {showSettings ? (
+                    <span className={styles.sidebarSettingsLabel}>Settings</span>
+                ) : null}
             </div>
         </>
     );
