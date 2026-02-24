@@ -1076,7 +1076,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
                 </div>
               </div>
 
-              <div ref={chatLogRef} className={chatExpanded ? `${styles.chatLog} ${styles.chatLogExpanded}` : styles.chatLog}>
+              <div ref={chatLogRef} className={styles.chatLog}>
                 {agentThreadLoading ? (
                   <p className={styles.meta}>Loading conversation...</p>
                 ) : null}
