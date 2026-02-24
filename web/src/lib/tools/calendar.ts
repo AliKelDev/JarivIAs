@@ -20,6 +20,7 @@ type CreateCalendarEventParams = {
   startIso: string;
   endIso: string;
   timeZone?: string;
+  attendees?: string[];
   auditType?: string;
   auditMeta?: Record<string, unknown>;
 };
@@ -68,6 +69,7 @@ export async function createCalendarEventForUser(
     startIso,
     endIso,
     timeZone,
+    attendees,
     auditType,
     auditMeta,
   } = params;
@@ -98,6 +100,7 @@ export async function createCalendarEventForUser(
       location: location || undefined,
       start: { dateTime: startIso, timeZone: timeZone || "UTC" },
       end: { dateTime: endIso, timeZone: timeZone || "UTC" },
+      attendees: attendees?.map((email) => ({ email })),
     },
   });
 
@@ -128,6 +131,7 @@ type UpdateCalendarEventParams = {
   startIso?: string;
   endIso?: string;
   timeZone?: string;
+  attendees?: string[];
   auditType?: string;
   auditMeta?: Record<string, unknown>;
 };
@@ -135,7 +139,7 @@ type UpdateCalendarEventParams = {
 export async function updateCalendarEventForUser(
   params: UpdateCalendarEventParams,
 ) {
-  const { uid, origin, eventId, summary, description, location, startIso, endIso, timeZone, auditType, auditMeta } = params;
+  const { uid, origin, eventId, summary, description, location, startIso, endIso, timeZone, attendees, auditType, auditMeta } = params;
 
   if (!eventId) {
     throw new Error("eventId is required.");
@@ -163,6 +167,9 @@ export async function updateCalendarEventForUser(
   }
   if (endIso !== undefined) {
     requestBody.end = { dateTime: endIso, timeZone: timeZone ?? "UTC" };
+  }
+  if (attendees !== undefined) {
+    requestBody.attendees = attendees.map((email) => ({ email }));
   }
 
   const calendar = google.calendar({ version: "v3", auth: oauthClient });

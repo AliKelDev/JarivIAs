@@ -84,6 +84,11 @@ const calendarCreateParametersJsonSchema: Record<string, unknown> = {
       type: "string",
       description: "IANA time zone name, e.g. America/New_York.",
     },
+    attendees: {
+      type: "array",
+      items: { type: "string" },
+      description: "Optional list of guest email addresses to invite.",
+    },
   },
   required: ["summary", "startIso", "endIso"],
 };
@@ -356,6 +361,10 @@ const calendarCreateTool: AgentToolDefinition = {
         ? args.timeZone.trim()
         : "UTC";
 
+    const attendees = Array.isArray(args.attendees)
+      ? (args.attendees as unknown[]).filter((e): e is string => typeof e === "string")
+      : undefined;
+
     return {
       ok: true,
       value: {
@@ -365,6 +374,7 @@ const calendarCreateTool: AgentToolDefinition = {
         startIso: startResult.value,
         endIso: endResult.value,
         timeZone,
+        attendees,
       },
     };
   },
@@ -374,7 +384,10 @@ const calendarCreateTool: AgentToolDefinition = {
     const startIso =
       typeof args.startIso === "string" ? args.startIso : "(missing start)";
     const endIso = typeof args.endIso === "string" ? args.endIso : "(missing end)";
-    return `Create event "${summary}" from ${startIso} to ${endIso}.`;
+    const guests = Array.isArray(args.attendees) && args.attendees.length > 0
+      ? ` Guests: ${(args.attendees as string[]).join(", ")}.`
+      : "";
+    return `Create event "${summary}" from ${startIso} to ${endIso}.${guests}`;
   },
   async execute(ctx, args) {
     const createResult = await createCalendarEventForUser({
@@ -387,6 +400,9 @@ const calendarCreateTool: AgentToolDefinition = {
       startIso: args.startIso as string,
       endIso: args.endIso as string,
       timeZone: typeof args.timeZone === "string" ? args.timeZone : "UTC",
+      attendees: Array.isArray(args.attendees)
+        ? (args.attendees as unknown[]).filter((e): e is string => typeof e === "string")
+        : undefined,
       auditType: "calendar_event_create_agent",
       auditMeta: {
         source: "agent_runtime",
@@ -435,6 +451,11 @@ const calendarUpdateParametersJsonSchema: Record<string, unknown> = {
       type: "string",
       description: "IANA time zone name, e.g. America/New_York (optional).",
     },
+    attendees: {
+      type: "array",
+      items: { type: "string" },
+      description: "Optional list of guest email addresses. Replaces the existing guest list.",
+    },
   },
   required: ["eventId"],
 };
@@ -473,6 +494,9 @@ const calendarUpdateTool: AgentToolDefinition = {
         startIso: typeof args.startIso === "string" ? args.startIso : undefined,
         endIso: typeof args.endIso === "string" ? args.endIso : undefined,
         timeZone: typeof args.timeZone === "string" && args.timeZone.trim() ? args.timeZone.trim() : "UTC",
+        attendees: Array.isArray(args.attendees)
+          ? (args.attendees as unknown[]).filter((e): e is string => typeof e === "string")
+          : undefined,
       },
     };
   },
@@ -483,6 +507,8 @@ const calendarUpdateTool: AgentToolDefinition = {
     if (args.startIso) changes.push(`start → ${args.startIso}`);
     if (args.endIso) changes.push(`end → ${args.endIso}`);
     if (args.location) changes.push(`location → "${args.location}"`);
+    if (Array.isArray(args.attendees) && args.attendees.length > 0)
+      changes.push(`guests → ${(args.attendees as string[]).join(", ")}`);
     return `Update event ${eventId}${changes.length ? `: ${changes.join(", ")}` : "."}`;
   },
   async execute(ctx, args) {
@@ -496,6 +522,9 @@ const calendarUpdateTool: AgentToolDefinition = {
       startIso: args.startIso as string | undefined,
       endIso: args.endIso as string | undefined,
       timeZone: args.timeZone as string | undefined,
+      attendees: Array.isArray(args.attendees)
+        ? (args.attendees as unknown[]).filter((e): e is string => typeof e === "string")
+        : undefined,
       auditType: "calendar_event_update_agent",
       auditMeta: { source: "agent_runtime", runId: ctx.runId, actionId: ctx.actionId },
     });
