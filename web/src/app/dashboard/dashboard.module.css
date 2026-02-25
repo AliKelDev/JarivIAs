@@ -1442,15 +1442,14 @@
 
 .slackChipTooltip {
   position: absolute;
-  left: calc(100% + 0.6rem);
-  top: 50%;
-  transform: translateY(-50%);
+  top: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
   background: #0d1a24;
   color: #c8dde8;
   border: 1px solid rgba(100, 180, 220, 0.18);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
-  width: 200px;
   font-size: 0.78rem;
   line-height: 1.5;
   z-index: 60;
@@ -1461,11 +1460,10 @@
 .slackChipTooltip::before {
   content: "";
   position: absolute;
-  right: 100%;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: 100%;
+  left: 1.25rem;
   border: 5px solid transparent;
-  border-right-color: rgba(100, 180, 220, 0.18);
+  border-bottom-color: rgba(100, 180, 220, 0.18);
 }
 
 .slackChipTooltipLink {
