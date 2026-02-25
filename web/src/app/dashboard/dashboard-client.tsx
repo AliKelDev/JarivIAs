@@ -9,10 +9,8 @@ import type {
   AgentTrustLevel,
   BriefingPrepareResponse,
   DashboardClientProps,
-  GmailPendingApproval,
   MemoryEntry,
   SlackSettingsResponse,
-  ToolResult,
 } from "./types";
 import styles from "./dashboard.module.css";
 import { DashboardHeader } from "./components/dashboard-header";
@@ -94,17 +92,6 @@ function readErrorMessage(value: unknown, fallback: string): string {
   return fallback;
 }
 
-function plusOneHourIso(): string {
-  const value = new Date();
-  value.setHours(value.getHours() + 1, 0, 0, 0);
-  return value.toISOString().slice(0, 16);
-}
-
-function plusTwoHoursIso(): string {
-  const value = new Date();
-  value.setHours(value.getHours() + 2, 0, 0, 0);
-  return value.toISOString().slice(0, 16);
-}
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
@@ -202,7 +189,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
     upcomingEvents,
     recentInboxMessages,
     recentDrafts,
-    refreshWorkspaceSnapshot,
     refreshWorkspaceData,
   } = useWorkspaceData();
 
@@ -221,10 +207,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
 
   const {
     threads,
-    threadsLoading,
-    threadsError,
-    threadsHasMore,
-    threadsCursor,
     refreshThreads,
   } = useThreadHistory();
 
@@ -254,28 +236,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const [memoryDeletingId, setMemoryDeletingId] = useState<string | null>(null);
 
-  const [gmailTo, setGmailTo] = useState("");
-  const [gmailSubject, setGmailSubject] = useState("Quick check-in");
-  const [gmailBody, setGmailBody] = useState(
-    "Hey, this is a test email from the Jariv Agentic Portal.",
-  );
-  const [gmailSubmitting, setGmailSubmitting] = useState(false);
-  const [gmailError, setGmailError] = useState<string | null>(null);
-  const [gmailResult, setGmailResult] = useState<ToolResult>(null);
-  const [gmailPendingApproval, setGmailPendingApproval] =
-    useState<GmailPendingApproval | null>(null);
-  const [gmailDecisionFeedback, setGmailDecisionFeedback] = useState("");
-  const [gmailDecisionSubmitting, setGmailDecisionSubmitting] = useState(false);
 
-  const [eventSummary, setEventSummary] = useState("Portal test event");
-  const [eventDescription, setEventDescription] = useState(
-    "Created from Jariv Agentic Portal dashboard.",
-  );
-  const [eventStartIso, setEventStartIso] = useState(plusOneHourIso());
-  const [eventEndIso, setEventEndIso] = useState(plusTwoHoursIso());
-  const [calendarSubmitting, setCalendarSubmitting] = useState(false);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
-  const [calendarResult, setCalendarResult] = useState<ToolResult>(null);
 
   const oauthError = useMemo(() => {
     return searchParams.get("oauth_error");
@@ -543,148 +504,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
     };
   }, [showSettings]);
 
-  async function handleRequestGmailApproval() {
-    setGmailSubmitting(true);
-    setGmailError(null);
-    setGmailResult(null);
-    setGmailPendingApproval(null);
 
-    try {
-      const response = await fetch("/api/tools/gmail/approval/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: gmailTo,
-          subject: gmailSubject,
-          bodyText: gmailBody,
-        }),
-      });
-
-      const body = (await response.json().catch(() => null)) as
-        | Record<string, unknown>
-        | null;
-
-      if (!response.ok) {
-        throw new Error(readErrorMessage(body, "Gmail send failed."));
-      }
-
-      if (
-        body &&
-        typeof body === "object" &&
-        "mode" in body &&
-        body.mode === "requires_approval" &&
-        "approval" in body &&
-        body.approval &&
-        typeof body.approval === "object" &&
-        "id" in body.approval &&
-        "to" in body.approval &&
-        "subject" in body.approval &&
-        "bodyPreview" in body.approval
-      ) {
-        setGmailPendingApproval(body.approval as GmailPendingApproval);
-        setGmailResult({
-          ok: true,
-          mode: "requires_approval",
-          approvalId: (body.approval as GmailPendingApproval).id,
-        });
-        return;
-      }
-
-      setGmailResult(body as Record<string, unknown>);
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Gmail approval request failed.";
-      setGmailError(message);
-    } finally {
-      setGmailSubmitting(false);
-    }
-  }
-
-  async function handleResolveGmailApproval(
-    decision: "reject" | "approve_once" | "approve_and_always_allow_recipient",
-  ) {
-    if (!gmailPendingApproval) {
-      return;
-    }
-
-    setGmailDecisionSubmitting(true);
-    setGmailError(null);
-    setGmailResult(null);
-
-    try {
-      const response = await fetch("/api/tools/gmail/approval/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          approvalId: gmailPendingApproval.id,
-          decision,
-          feedback: gmailDecisionFeedback,
-        }),
-      });
-
-      const body = (await response.json().catch(() => null)) as
-        | Record<string, unknown>
-        | null;
-
-      if (!response.ok) {
-        throw new Error(readErrorMessage(body, "Failed to resolve approval."));
-      }
-
-      setGmailResult(body as Record<string, unknown>);
-      setGmailPendingApproval(null);
-      setGmailDecisionFeedback("");
-      void refreshWorkspaceSnapshot();
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to resolve Gmail approval.";
-      setGmailError(message);
-    } finally {
-      setGmailDecisionSubmitting(false);
-    }
-  }
-
-  async function handleCreateCalendarEvent() {
-    setCalendarSubmitting(true);
-    setCalendarError(null);
-    setCalendarResult(null);
-
-    try {
-      const response = await fetch("/api/tools/calendar/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summary: eventSummary,
-          description: eventDescription,
-          startIso: new Date(eventStartIso).toISOString(),
-          endIso: new Date(eventEndIso).toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        }),
-      });
-
-      const body = (await response.json().catch(() => null)) as
-        | Record<string, unknown>
-        | null;
-
-      if (!response.ok) {
-        throw new Error(readErrorMessage(body, "Calendar create failed."));
-      }
-
-      setCalendarResult(body as Record<string, unknown>);
-      void refreshWorkspaceSnapshot();
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Calendar create failed.";
-      setCalendarError(message);
-    } finally {
-      setCalendarSubmitting(false);
-    }
-  }
 
   async function handleSaveProfile() {
     setProfileSaving(true);
