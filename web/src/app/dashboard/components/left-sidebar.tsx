@@ -93,17 +93,9 @@ export function LeftSidebar({
             <div className={styles.sidebarServices}>
                 {services.map((svc) => {
                     const isSlackDisconnected = svc.name === "Slack" && !svc.connected;
-                    return (
-                        <div
-                            key={svc.name}
-                            className={
-                                svc.connected
-                                    ? styles.sidebarServiceChip
-                                    : styles.sidebarServiceChipOff
-                            }
-                            style={{ position: "relative" }}
-                            onClick={isSlackDisconnected ? () => setSlackTooltipOpen((v) => !v) : undefined}
-                        >
+                    const chipClass = svc.connected ? styles.sidebarServiceChip : styles.sidebarServiceChipOff;
+                    const chipContent = (
+                        <>
                             <span className={styles.sidebarServiceIcon}>{svc.icon}</span>
                             <span className={styles.sidebarServiceName}>{svc.name}</span>
                             {svc.count !== null ? (
@@ -126,6 +118,28 @@ export function LeftSidebar({
                                     Then paste it in Settings <span style={{ opacity: 0.7 }}>⚙</span>
                                 </div>
                             ) : null}
+                        </>
+                    );
+                    if (isSlackDisconnected) {
+                        return (
+                            <button
+                                key={svc.name}
+                                type="button"
+                                className={chipClass}
+                                style={{ position: "relative", cursor: "pointer", textAlign: "left" }}
+                                onClick={() => setSlackTooltipOpen((v) => !v)}
+                            >
+                                {chipContent}
+                            </button>
+                        );
+                    }
+                    return (
+                        <div
+                            key={svc.name}
+                            className={chipClass}
+                            style={{ position: "relative" }}
+                        >
+                            {chipContent}
                         </div>
                     );
                 })}
