@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ThreadSummary } from "../types";
 import styles from "../dashboard.module.css";
 
@@ -41,6 +42,8 @@ export function LeftSidebar({
     formatDateTime,
     truncateWithEllipsis,
 }: LeftSidebarProps) {
+    const [slackTooltipOpen, setSlackTooltipOpen] = useState(false);
+
     const services: ServiceChip[] = [
         {
             name: "Gmail",
@@ -88,22 +91,44 @@ export function LeftSidebar({
 
             {/* Service chips */}
             <div className={styles.sidebarServices}>
-                {services.map((svc) => (
-                    <div
-                        key={svc.name}
-                        className={
-                            svc.connected
-                                ? styles.sidebarServiceChip
-                                : styles.sidebarServiceChipOff
-                        }
-                    >
-                        <span className={styles.sidebarServiceIcon}>{svc.icon}</span>
-                        <span className={styles.sidebarServiceName}>{svc.name}</span>
-                        {svc.count !== null ? (
-                            <span className={styles.sidebarServiceBadge}>{svc.count}</span>
-                        ) : null}
-                    </div>
-                ))}
+                {services.map((svc) => {
+                    const isSlackDisconnected = svc.name === "Slack" && !svc.connected;
+                    return (
+                        <div
+                            key={svc.name}
+                            className={
+                                svc.connected
+                                    ? styles.sidebarServiceChip
+                                    : styles.sidebarServiceChipOff
+                            }
+                            style={{ position: "relative" }}
+                            onClick={isSlackDisconnected ? () => setSlackTooltipOpen((v) => !v) : undefined}
+                        >
+                            <span className={styles.sidebarServiceIcon}>{svc.icon}</span>
+                            <span className={styles.sidebarServiceName}>{svc.name}</span>
+                            {svc.count !== null ? (
+                                <span className={styles.sidebarServiceBadge}>{svc.count}</span>
+                            ) : null}
+                            {isSlackDisconnected && slackTooltipOpen ? (
+                                <div className={styles.slackChipTooltip}>
+                                    <strong>Connect Slack</strong>
+                                    <br />
+                                    You&apos;ll need a Slack User Token.{" "}
+                                    <a
+                                        href="https://api.slack.com/apps"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={styles.slackChipTooltipLink}
+                                    >
+                                        Get one here →
+                                    </a>
+                                    <br />
+                                    Then paste it in Settings <span style={{ opacity: 0.7 }}>⚙</span>
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Thread list */}

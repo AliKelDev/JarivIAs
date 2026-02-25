@@ -1440,6 +1440,44 @@
   letter-spacing: 0.04em;
 }
 
+.slackChipTooltip {
+  position: absolute;
+  left: calc(100% + 0.6rem);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #0d1a24;
+  color: #c8dde8;
+  border: 1px solid rgba(100, 180, 220, 0.18);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  width: 200px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  z-index: 60;
+  pointer-events: all;
+  animation: fadeInMessage 150ms ease both;
+}
+
+.slackChipTooltip::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: rgba(100, 180, 220, 0.18);
+}
+
+.slackChipTooltipLink {
+  color: #4eaacc;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.slackChipTooltipLink:hover {
+  color: #7dcae0;
+}
+
 .settingsOverlayBackdrop {
   position: fixed;
   inset: 0 0 0 248px;
