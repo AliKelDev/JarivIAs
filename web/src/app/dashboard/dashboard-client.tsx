@@ -23,6 +23,7 @@ import { RightRail } from "./components/right-rail";
 import { SlackIntegrationPanel } from "./components/slack-integration-panel";
 import { useAgentTrust } from "./hooks/use-agent-trust";
 import { useChatRunner } from "./hooks/use-chat-runner";
+import { useDashboardNavigation } from "./hooks/use-dashboard-navigation";
 import { useThreadHistory } from "./hooks/use-thread-history";
 import { useWorkspaceData } from "./hooks/use-workspace-data";
 
@@ -192,14 +193,20 @@ export function DashboardClient({ user }: DashboardClientProps) {
     refreshWorkspaceData,
   } = useWorkspaceData();
 
-  const [chatExpanded, setChatExpanded] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const {
+    chatExpanded,
+    toggleChatExpanded,
+    showSettings,
+    toggleSettings,
+    closeSettings,
+    settingsOverlayRef,
+  } = useDashboardNavigation();
+
   const [briefingPreparing, setBriefingPreparing] = useState(false);
   const [preparedBriefingSummary, setPreparedBriefingSummary] = useState<string | null>(null);
   const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<string | null>(null);
   const [briefingDismissed, setBriefingDismissed] = useState(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
-  const settingsOverlayRef = useRef<HTMLDivElement>(null);
 
   const [activityRuns, setActivityRuns] = useState<ActivityRun[]>([]);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -475,35 +482,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
     }
   }, [agentMessages, streamingAssistantText]);
 
-  useEffect(() => {
-    if (!showSettings) {
-      return;
-    }
-
-    function handleDocumentMouseDown(event: MouseEvent) {
-      const target = event.target as Node | null;
-      if (!target) {
-        return;
-      }
-
-      const targetElement = target as HTMLElement;
-      if (targetElement.closest("[data-settings-toggle='true']")) {
-        return;
-      }
-
-      if (settingsOverlayRef.current?.contains(target)) {
-        return;
-      }
-
-      setShowSettings(false);
-    }
-
-    document.addEventListener("mousedown", handleDocumentMouseDown);
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentMouseDown);
-    };
-  }, [showSettings]);
-
 
 
   async function handleSaveProfile() {
@@ -611,7 +589,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
               onOpenThread={(threadId) => openAgentThread(threadId, { scrollToTop: false })}
               onNewConversation={handleStartNewConversation}
               showSettings={showSettings}
-              onSettingsToggle={() => setShowSettings((value) => !value)}
+              onSettingsToggle={toggleSettings}
               formatDateTime={formatDateTime}
               truncateWithEllipsis={truncateWithEllipsis}
             />
@@ -699,7 +677,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() => setChatExpanded((v) => !v)}
+                    onClick={toggleChatExpanded}
                   >
                     {chatExpanded ? "Collapse" : "Expand"}
                   </button>
@@ -987,7 +965,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
         {showSettings ? (
           <div
             className={styles.settingsOverlayBackdrop}
-            onClick={() => setShowSettings(false)}
+            onClick={closeSettings}
             role="presentation"
           >
             <div
@@ -1000,7 +978,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
                 <button
                   type="button"
                   className={styles.settingsOverlayClose}
-                  onClick={() => setShowSettings(false)}
+                  onClick={closeSettings}
                   aria-label="Close settings"
                 >
                   ✕
