@@ -1280,7 +1280,14 @@
 }
 
 .sidebarServiceChipOff {
-  opacity: 0.45;
+  opacity: 0.55;
+  border: 1px dashed rgba(100, 140, 170, 0.5);
+  cursor: pointer;
+}
+
+.sidebarServiceChipOff:hover {
+  opacity: 0.8;
+  border-color: rgba(100, 180, 220, 0.7);
 }
 
 .sidebarServiceIcon {
@@ -1447,14 +1454,16 @@
   right: 0;
   background: #0d1a24;
   color: #c8dde8;
-  border: 1px solid rgba(100, 180, 220, 0.18);
+  border: 1px solid rgba(100, 180, 220, 0.4);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   font-size: 0.78rem;
   line-height: 1.5;
   z-index: 60;
   pointer-events: all;
+  opacity: 1;
   animation: fadeInMessage 150ms ease both;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .slackChipTooltip::before {
