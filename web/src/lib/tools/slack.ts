@@ -101,10 +101,11 @@ export async function readSlackMessagesForUser(
     throw new Error(`Slack API error: ${data.error ?? "Unknown error"}`);
   }
 
-  return data.messages.map((m) => ({
+  const messages: SlackMessage[] = data.messages.map((m) => ({
     ts: m.ts,
     user: m.user,
     text: m.text,
     files: m.files?.map((f) => ({ id: f.id, name: f.name, title: f.title })),
   }));
+  return JSON.parse(JSON.stringify(messages)) as SlackMessage[];
 }
