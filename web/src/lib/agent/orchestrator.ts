@@ -840,7 +840,7 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunRespon
         planningConversation = appendPlanningMessage({
           conversation: planningConversation,
           message: {
-            role: "assistant",
+            role: "user",
             text: buildToolExecutionContextMessage({
               toolName: tool.name,
               toolArgs,
