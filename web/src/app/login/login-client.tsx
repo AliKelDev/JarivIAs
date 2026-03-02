@@ -52,7 +52,7 @@ export function LoginClient() {
   return (
     <main className={styles.page}>
       <section className={styles.card}>
-        <h1 className={styles.title}>Jariv Agentic Portal</h1>
+        <h1 className={styles.title}>Alikel Agentic Portal</h1>
         <p className={styles.subtitle}>
           Sign in with Google to access your dashboard and run assistant actions.
         </p>

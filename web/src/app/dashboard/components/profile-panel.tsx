@@ -75,7 +75,7 @@ export function ProfilePanel({
                 className={styles.input}
                 value={profileOrganization}
                 onChange={(event) => onChangeOrganization(event.target.value)}
-                placeholder="e.g. JarivIAs"
+                placeholder="e.g. Alikel"
               />
             </label>
           </div>
@@ -103,7 +103,7 @@ export function ProfilePanel({
               className={styles.textarea}
               value={profileProjects}
               onChange={(event) => onChangeProjects(event.target.value)}
-              placeholder={"Building JarivIAs, an agentic AI portal"}
+              placeholder={"Building Alikel, an agentic AI portal"}
             />
           </label>
           <label className={styles.label}>

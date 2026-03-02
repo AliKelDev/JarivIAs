@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Jariv Agentic Portal",
+  title: "Alikel Agentic Portal",
   description: "Agentic assistant for email, calendar, and messaging actions",
 };
 

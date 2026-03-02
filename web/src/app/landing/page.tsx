@@ -2,7 +2,7 @@ import Link from "next/link";
 import styles from "./landing.module.css";
 
 export const metadata = {
-  title: "JarivIAs — Meet Alik, your AI chief of staff",
+  title: "Alikel — Meet Alik, your AI chief of staff",
   description:
     "Alik reads your inbox, manages your calendar, drafts your emails, and remembers your preferences — so you can focus on what matters.",
 };
@@ -12,7 +12,7 @@ export default function LandingPage() {
     <div className={styles.page}>
       {/* Nav */}
       <nav className={styles.nav}>
-        <span className={styles.navBrand}>JarivIAs</span>
+        <span className={styles.navBrand}>Alikel</span>
         <Link href="/login" className={styles.navCta}>
           Sign in
         </Link>
@@ -166,7 +166,7 @@ export default function LandingPage() {
             Built for founders, operators, and anyone who does too many things.
           </h2>
           <p className={styles.bottomCtaBody}>
-            JarivIAs is in early access. Request an invite and be among the
+            Alikel is in early access. Request an invite and be among the
             first to work with Alik.
           </p>
           <Link href="/login" className={styles.primaryCta}>
@@ -177,7 +177,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className={styles.footer}>
-        <span>JarivIAs &copy; 2026</span>
+        <span>Alikel &copy; 2026</span>
         <Link href="/login" className={styles.footerLink}>
           Sign in
         </Link>
