@@ -206,6 +206,9 @@ export function DashboardClient({ user }: DashboardClientProps) {
   const [preparedBriefingSummary, setPreparedBriefingSummary] = useState<string | null>(null);
   const [preparedBriefingDateKey, setPreparedBriefingDateKey] = useState<string | null>(null);
   const [briefingDismissed, setBriefingDismissed] = useState(false);
+  const [briefingEmailSending, setBriefingEmailSending] = useState(false);
+  const [briefingEmailSent, setBriefingEmailSent] = useState(false);
+  const [briefingEmailError, setBriefingEmailError] = useState<string | null>(null);
   const chatLogRef = useRef<HTMLDivElement>(null);
 
   const [activityRuns, setActivityRuns] = useState<ActivityRun[]>([]);
@@ -561,6 +564,31 @@ export function DashboardClient({ user }: DashboardClientProps) {
     router.refresh();
   }
 
+  async function sendBriefingEmail() {
+    if (briefingEmailSending) return;
+    setBriefingEmailSending(true);
+    setBriefingEmailSent(false);
+    setBriefingEmailError(null);
+    try {
+      const response = await fetch("/api/agent/briefing/send", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok) {
+        throw new Error(body?.error ?? "Failed to send briefing email.");
+      }
+      setBriefingEmailSent(true);
+      setTimeout(() => setBriefingEmailSent(false), 4000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send briefing email.";
+      setBriefingEmailError(msg);
+      setTimeout(() => setBriefingEmailError(null), 5000);
+    } finally {
+      setBriefingEmailSending(false);
+    }
+  }
+
   const hasCalendarReadScope = Boolean(
     integration?.scopes?.includes("https://www.googleapis.com/auth/calendar.readonly"),
   );
@@ -647,6 +675,17 @@ export function DashboardClient({ user }: DashboardClientProps) {
                           Pin to chat
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className={styles.pinButton}
+                        onClick={() => void sendBriefingEmail()}
+                        disabled={briefingEmailSending || briefingEmailSent}
+                      >
+                        {briefingEmailSending ? "Sending…" : briefingEmailSent ? "✓ Sent" : "📧 Send to email"}
+                      </button>
+                      {briefingEmailError ? (
+                        <span className={styles.briefingEmailError}>{briefingEmailError}</span>
+                      ) : null}
                     </div>
                   </>
                 )}

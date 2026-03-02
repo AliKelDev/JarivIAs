@@ -566,6 +566,14 @@
   margin-top: 1rem;
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.briefingEmailError {
+  font-size: 0.75rem;
+  color: #f87171;
+  margin-left: 0.25rem;
 }
 
 .runButton:disabled,
