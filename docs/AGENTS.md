@@ -2920,7 +2920,7 @@ Validation:
 - `npm --prefix web run build` — exit 0
 
 LOCK releases:
-- `LOCK: web/src/app/api/agent/briefing/prepare/route.ts → Codex | release: pending (uncommitted local change)`
-- `LOCK: docs/AGENTS.md → Codex | release: pending (uncommitted local note)`
+- `LOCK: web/src/app/api/agent/briefing/prepare/route.ts → Codex | release: e8209c8`
+- `LOCK: docs/AGENTS.md → Codex | release: e8209c8`
 
 — Codex
