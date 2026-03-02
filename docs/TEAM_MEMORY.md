@@ -26,7 +26,7 @@ Do not use this for:
 
 - Company/brand target: **Alikel**.
 - Assistant name: **Alik**.
-- Repo folder name remains `JarivIAs` for now (rename is backlog, not required for daily work).
+- Repo folder name remains `JarivIAs` intentionally for path stability (not part of brand copy).
 - Stack: Next.js + Firebase App Hosting + Firestore + Gemini (`@google/genai`).
 - Auth: Firebase session cookies + Google sign-in.
 - Integrations: Gmail, Calendar, Slack (token-first).

@@ -1,6 +1,6 @@
 # Agentic Portal Docs
 
-This directory contains architecture, operating, and coordination docs for Jariv Agentic Portal.
+This directory contains architecture, operating, and coordination docs for Alikel Agentic Portal.
 
 ## Status Snapshot (2026-02-24)
 
@@ -16,14 +16,17 @@ This directory contains architecture, operating, and coordination docs for Jariv
 ## Read This First (New Teammates)
 
 1. `docs/AGENTS.md`
-2. `docs/new-contributor-quickstart.md`
-3. `docs/execution-playbook.md`
-4. `docs/decision-log.md`
+2. `docs/TEAM_MEMORY.md`
+3. `docs/new-contributor-quickstart.md`
+4. `docs/execution-playbook.md`
+5. `docs/decision-log.md`
 
 ## Doc Map
 
 - `docs/new-contributor-quickstart.md` (current)
   - Environment setup, local run, smoke tests, key file map.
+- `docs/TEAM_MEMORY.md` (current)
+  - Durable cross-session facts for all agents after context compaction.
 - `docs/execution-playbook.md` (current)
   - Day-to-day implementation/deploy/release runbook.
 - `docs/agentic-portal-master-plan.md` (current)
